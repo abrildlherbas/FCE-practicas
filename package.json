@@ -1,10 +1,14 @@
 {
-  "name": "FCE-practicas",
+  "name": "Word-to-Html",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Conversor de documentos Word a HTML",
+  "main": ".vite/build/main.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "electron-forge start",
+    "dev": "electron-forge start",
+    "package": "electron-forge package",
+    "make": "electron-forge make",
+    "typecheck": "tsc --noEmit"
   },
   "repository": {
     "type": "git",
@@ -17,12 +21,23 @@
     "url": "https://github.com/abrildlherbas/FCE-practicas/issues"
   },
   "homepage": "https://github.com/abrildlherbas/FCE-practicas#readme",
-  "devDependencies": {
-    "electron": "^44.1.1"
-  },
   "dependencies": {
     "fast-xml-parser": "^5.11.1",
     "jszip": "^3.10.1",
-    "mammoth": "^1.12.2"
+    "mammoth": "^1.11.0"
+  },
+  "devDependencies": {
+    "@electron-forge/cli": "^7.11.2",
+    "@electron-forge/maker-deb": "^7.11.2",
+    "@electron-forge/maker-rpm": "^7.11.2",
+    "@electron-forge/maker-squirrel": "^7.11.2",
+    "@electron-forge/maker-zip": "^7.11.2",
+    "@electron-forge/plugin-vite": "^7.11.2",
+    "@types/node": "^24.13.3",
+    "electron": "^44.1.1",
+    "tsx": "^4.20.3",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.6",
+    "vitest": "^3.2.4"
   }
 }
