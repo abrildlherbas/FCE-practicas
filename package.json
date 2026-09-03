@@ -1,0 +1,28 @@
+{
+  "name": "FCE-practicas",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/abrildlherbas/FCE-practicas.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/abrildlherbas/FCE-practicas/issues"
+  },
+  "homepage": "https://github.com/abrildlherbas/FCE-practicas#readme",
+  "devDependencies": {
+    "electron": "^44.1.1"
+  },
+  "dependencies": {
+    "fast-xml-parser": "^5.11.1",
+    "jszip": "^3.10.1",
+    "mammoth": "^1.12.2"
+  }
+}
