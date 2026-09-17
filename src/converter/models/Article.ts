@@ -13,6 +13,9 @@ export interface Article {
     keywords: string[];
     jel_codes: string[];
 
+    doi?: string;
+    section?: string;
+
     dates: {
       received?: string;
       accepted?: string;
@@ -26,36 +29,6 @@ export interface Article {
 
   references: Reference[];
 }
-
-export type BodyBlock =
-  | {
-      type: "heading";
-      level: number;
-      text: string;
-    }
-  | {
-      type: "paragraph";
-      text: string;
-    }
-  | {
-      type: "list";
-      ordered: boolean;
-      items: string[];
-    }
-  | {
-      type: "table";
-      id: string;
-      caption?: string;
-      headers: string[];
-      rows: string[][];
-    }
-  | {
-      type: "figure";
-      id: string;
-      caption?: string;
-      src: string;
-      alt?: string;
-    };
 
 export interface Note {
   id: number;
@@ -72,3 +45,20 @@ export interface Reference {
   id: string;
   text: string;
 }
+
+export type InlineRun =
+  | { type: "text"; text: string; bold?: boolean; italic?: boolean }
+  | { type: "noteRef"; noteId: number; noteType: "footnote" | "endnote" };
+
+export interface HeadingBlock {
+  type: "heading";
+  level: number;
+  runs: InlineRun[];
+}
+
+export interface ParagraphBlock {
+  type: "paragraph";
+  runs: InlineRun[];
+}
+
+export type BodyBlock = HeadingBlock | ParagraphBlock;
