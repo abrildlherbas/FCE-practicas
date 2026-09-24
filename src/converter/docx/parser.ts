@@ -9,6 +9,14 @@ import {
   InlineRun
 } from "../models/Article";
 
+import {
+  findElement,
+  findElements,
+  findDirectChildren,
+  extractText,
+  readWId,
+} from "./docx-xml.utils";
+
 interface RawParagraph {
   xml: any;
   runs: InlineRun[];
@@ -29,10 +37,7 @@ export class DocxParser {
     preserveOrder: true,
   });
 
-  async parse(
-    zip: JSZip,
-    sourcePath: string
-  ): Promise<Article> {
+  async parse(zip: JSZip, sourcePath: string): Promise<Article> {
     const documentXml = await this.readRequired(
       zip,
       "word/document.xml"
@@ -48,28 +53,17 @@ export class DocxParser {
       "word/endnotes.xml"
     );
 
-    const document = this.xmlParser.parse(
-      documentXml
-    );
+    const document = this.xmlParser.parse(documentXml);
 
     const footnotes = footnotesXml
-      ? this.parseNotes(
-          footnotesXml,
-          "footnote"
-        )
+      ? this.parseNotes(footnotesXml, "footnote")
       : [];
 
     const endnotes = endnotesXml
-      ? this.parseNotes(
-          endnotesXml,
-          "endnote"
-        )
+      ? this.parseNotes(endnotesXml, "endnote")
       : [];
 
-    const structure =
-      this.parseDocumentStructure(
-        document
-      );
+    const structure = this.parseDocumentStructure(document);
 
     this.attachNoteAnchors(
       structure.body,
@@ -82,56 +76,40 @@ export class DocxParser {
         format: "docx",
         normalizedFormat: "docx",
       },
-
       header: structure.header,
-
       body: structure.body,
-
-      notes: [
-        ...footnotes,
-        ...endnotes,
-      ],
-
+      notes: [...footnotes, ...endnotes],
       references: [],
     };
   }
 
-  private parseDocumentStructure(
-  document: any
-): ParsedStructure {
-  const body = this.findElement(
-    document,
-    "w:body"
-  );
+  private parseDocumentStructure(document: any): ParsedStructure {
+    const body = findElement(document, "w:body");
 
-  if (!body) {
+    if (!body) {
+      return {
+        header: {
+          authors: [],
+          keywords: [],
+          jel_codes: [],
+          dates: {},
+        },
+        body: [],
+      };
+    }
+
+    const rawParagraphs = this.extractBodyParagraphs(body);
+    const normalizedParagraphs =
+      this.normalizeBlocks(rawParagraphs);
+
+    const header = this.extractHeader(normalizedParagraphs);
+    const bodyBlocks =
+      this.extractMainBody(normalizedParagraphs);
+
     return {
-      header: {
-        authors: [],
-        keywords: [],
-        jel_codes: [],
-        dates: {},
-      },
-      body: [],
+      header,
+      body: bodyBlocks,
     };
-  }
-
-  const rawParagraphs =
-    this.extractBodyParagraphs(body);
-
-  const normalizedParagraphs =
-    this.normalizeBlocks(rawParagraphs);
-
-  const header =
-    this.extractHeader(normalizedParagraphs);
-
-  const bodyBlocks =
-    this.extractMainBody(normalizedParagraphs);
-
-  return {
-    header,
-    body: bodyBlocks,
-  };
   }
 
   private async readRequired(
@@ -155,9 +133,7 @@ export class DocxParser {
   ): Promise<string | null> {
     const file = zip.file(filePath);
 
-    if (!file) {
-      return null;
-    }
+    if (!file) return null;
 
     return file.async("text");
   }
@@ -166,7 +142,7 @@ export class DocxParser {
     body: any
   ): RawParagraph[] {
     const paragraphElements =
-      this.findDirectChildren(body, "w:p");
+      findDirectChildren(body, "w:p");
 
     return paragraphElements.map(
       (paragraph): RawParagraph => {
@@ -204,7 +180,8 @@ export class DocxParser {
         continue;
       }
 
-      const previous = normalized[normalized.length - 1];
+      const previous =
+        normalized[normalized.length - 1];
 
       if (
         !previous ||
@@ -212,10 +189,7 @@ export class DocxParser {
         previous.bold !== run.bold ||
         previous.italic !== run.italic
       ) {
-        normalized.push({
-          ...run,
-        });
-
+        normalized.push({ ...run });
         continue;
       }
 
@@ -239,11 +213,8 @@ export class DocxParser {
     const previous = previousText.trimEnd();
     const current = currentText.trimStart();
 
-    if (!previous || !current) {
-      return "";
-    }
+    if (!previous || !current) return "";
 
-    // Si el XML ya conserva un espacio explícito, respetarlo.
     if (
       previousText.endsWith(" ") ||
       currentText.startsWith(" ")
@@ -251,17 +222,14 @@ export class DocxParser {
       return "";
     }
 
-    // Puntuación que no necesita espacio delante.
     if (/^[.,;:!?%)\]}]/.test(current)) {
       return "";
     }
 
-    // Después de signos de apertura no agregamos espacio.
     if (/[([{]$/.test(previous)) {
       return "";
     }
 
-    // Palabras/números partidos en un punto de ejecución.
     if (
       /\d$/.test(previous) &&
       /^\d/.test(current)
@@ -269,22 +237,15 @@ export class DocxParser {
       return "";
     }
 
-    /*
-    * Fragmentos de una sola letra:
-    *
-    * hospitalari + a
-    * Código + s
-    * o + f healthcare
-    * L + a literatura
-    *
-    * En estos documentos suelen ser cortes internos
-    * de una palabra.
-    */
     const previousWord =
-      previous.match(/[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+$/)?.[0] ?? "";
+      previous.match(
+        /[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+$/
+      )?.[0] ?? "";
 
     const currentWord =
-      current.match(/^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+/)?.[0] ?? "";
+      current.match(
+        /^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+/
+      )?.[0] ?? "";
 
     if (
       previousWord.length === 1 ||
@@ -293,10 +254,6 @@ export class DocxParser {
       return "";
     }
 
-    // Dos fragmentos de palabras normales:
-    // "Universitat" + "de"
-    // "design" + "is used"
-    // "Conclusions..." + "impacts"
     if (
       /[A-Za-zÁÉÍÓÚÜÑáéíóúüñ)]$/.test(previous) &&
       /^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]/.test(current)
@@ -319,9 +276,7 @@ export class DocxParser {
           (run.type === "text" && run.text.trim())
       );
 
-      if (!hasContent) {
-        continue;
-      }
+      if (!hasContent) continue;
 
       if (paragraph.headingLevel !== null) {
         bodyBlocks.push({
@@ -342,30 +297,44 @@ export class DocxParser {
     return bodyBlocks;
   }
 
-  private parseRuns(paragraph: any): InlineRun[] {
-    const runElements = this.findElements(paragraph, "w:r");
+  private parseRuns(
+    paragraph: any
+  ): InlineRun[] {
+    const runElements =
+      findElements(paragraph, "w:r");
+
     const result: InlineRun[] = [];
 
     for (const run of runElements) {
-      const footnoteRef = this.findElement(run, "w:footnoteReference");
+      const footnoteRef =
+        findElement(run, "w:footnoteReference");
 
       if (footnoteRef) {
-        const id = this.readWId(footnoteRef);
+        const id = readWId(footnoteRef);
 
         if (id !== null) {
-          result.push({ type: "noteRef", noteId: id, noteType: "footnote" });
+          result.push({
+            type: "noteRef",
+            noteId: id,
+            noteType: "footnote",
+          });
         }
 
         continue;
       }
 
-      const endnoteRef = this.findElement(run, "w:endnoteReference");
+      const endnoteRef =
+        findElement(run, "w:endnoteReference");
 
       if (endnoteRef) {
-        const id = this.readWId(endnoteRef);
+        const id = readWId(endnoteRef);
 
         if (id !== null) {
-          result.push({ type: "noteRef", noteId: id, noteType: "endnote" });
+          result.push({
+            type: "noteRef",
+            noteId: id,
+            noteType: "endnote",
+          });
         }
 
         continue;
@@ -373,11 +342,10 @@ export class DocxParser {
 
       const text = this.extractRunText(run);
 
-      if (!text) {
-        continue;
-      }
+      if (!text) continue;
 
-      const { bold, italic } = this.extractRunFormatting(run);
+      const { bold, italic } =
+        this.extractRunFormatting(run);
 
       result.push({
         type: "text",
@@ -391,270 +359,211 @@ export class DocxParser {
   }
 
   private extractRunText(run: any): string {
-    const textNodes = this.findElements(run, "w:t");
+    const textNodes =
+      findElements(run, "w:t");
 
-    return textNodes.map((node) => this.extractText(node)).join("");
+    return textNodes
+      .map((node) => extractText(node))
+      .join("");
   }
 
-  private extractRunFormatting(run: any): { bold: boolean; italic: boolean } {
-    const properties = this.findElement(run, "w:rPr");
+  private extractRunFormatting(
+    run: any
+  ): {
+    bold: boolean;
+    italic: boolean;
+  } {
+    const properties =
+      findElement(run, "w:rPr");
 
     if (!properties) {
-      return { bold: false, italic: false };
+      return {
+        bold: false,
+        italic: false,
+      };
     }
 
-    const bold = this.findElement(properties, "w:b") !== null;
-    const italic = this.findElement(properties, "w:i") !== null;
+    const bold =
+      findElement(properties, "w:b") !== null;
 
-    return { bold, italic };
-  }
+    const italic =
+      findElement(properties, "w:i") !== null;
 
-  private readWId(node: any): number | null {
-    const raw = node["@_w:id"];
-
-    if (raw === undefined) {
-      return null;
-    }
-
-    const id = Number(raw);
-
-    return Number.isNaN(id) ? null : id;
+    return {
+      bold,
+      italic,
+    };
   }
 
   private extractParagraphText(
     paragraph: any
   ): string {
-    const texts = this.findElements(
-      paragraph,
-      "w:t"
-    );
+    const texts =
+      findElements(paragraph, "w:t");
 
     return texts
-      .map((node) => this.extractText(node))
+      .map((node) => extractText(node))
       .join("");
   }
 
   private extractHeader(
-  paragraphs: RawParagraph[]
-): Article["header"] {
-  const header: Article["header"] = {
-    authors: [],
-    keywords: [],
-    jel_codes: [],
-    dates: {},
-  };
+    paragraphs: RawParagraph[]
+  ): Article["header"] {
+    const header: Article["header"] = {
+      authors: [],
+      keywords: [],
+      jel_codes: [],
+      dates: {},
+    };
 
-  const texts = paragraphs.map(
-    (paragraph) => paragraph.text.trim()
-  );
+    const texts = paragraphs.map(
+      (paragraph) => paragraph.text.trim()
+    );
 
-  const resumenIndex = texts.findIndex(
-    (text) => text.toUpperCase() === "RESUMEN"
-  );
+    const resumenIndex = texts.findIndex(
+      (text) =>
+        text.toUpperCase() === "RESUMEN"
+    );
 
-  const abstractIndex = texts.findIndex(
-    (text) => text.toUpperCase() === "ABSTRACT"
-  );
+    const abstractIndex = texts.findIndex(
+      (text) =>
+        text.toUpperCase() === "ABSTRACT"
+    );
 
-  if (resumenIndex === -1) {
+    if (resumenIndex === -1) {
+      return header;
+    }
+
+    const doiParagraph = texts.find(
+      (text) =>
+        text
+          .toUpperCase()
+          .startsWith("DOI:")
+    );
+
+    if (doiParagraph) {
+      header.doi = doiParagraph
+        .replace(/^DOI:\s*/i, "")
+        .trim();
+    }
+
+    const sectionParagraph = texts.find(
+      (text) =>
+        text
+          .toLowerCase()
+          .startsWith("sección:")
+    );
+
+    if (sectionParagraph) {
+      header.section = sectionParagraph
+        .replace(/^Sección:\s*/i, "")
+        .trim();
+    }
+
+    const titleCandidate =
+      this.findFirstTitleCandidate(
+        paragraphs,
+        resumenIndex
+      );
+
+    if (titleCandidate) {
+      header.title = titleCandidate;
+    }
+
+    const abstractParagraphs =
+      this.extractAbstractParagraphs(
+        paragraphs,
+        resumenIndex,
+        abstractIndex
+      );
+
+    if (abstractParagraphs.length > 0) {
+      header.abstract =
+        abstractParagraphs.join("\n\n");
+    }
+
+    const spanishKeywords = texts.find(
+      (text) =>
+        /^palabras\s+clave\s*:/i.test(text)
+    );
+
+    if (spanishKeywords) {
+      header.keywords =
+        this.parseListField(
+          spanishKeywords,
+          /^palabras\s+clave\s*:/i
+        );
+    }
+
+    const jel = texts.find(
+      (text) =>
+        /^(c[oó]digos\s+jel|jel\s+codes?)\s*:/i.test(
+          text
+        )
+    );
+
+    if (jel) {
+      header.jel_codes =
+        this.parseListField(
+          jel,
+          /^(c[oó]digos\s+jel|jel\s+codes?)\s*:/i
+        );
+    }
+
+    header.dates.received =
+      this.extractField(
+        texts,
+        /^Recibido\s*:/i
+      );
+
+    header.dates.accepted =
+      this.extractField(
+        texts,
+        /^Aceptado\s*:/i
+      );
+
+    header.dates.published =
+      this.extractField(
+        texts,
+        /^Publicado\s*:/i
+      );
+
     return header;
   }
-
-  // DOI
-  const doiParagraph = texts.find(
-    (text) =>
-      text.toUpperCase().startsWith("DOI:")
-  );
-
-  if (doiParagraph) {
-    header.doi = doiParagraph
-      .replace(/^DOI:\s*/i, "")
-      .trim();
-  }
-
-  // Sección
-  const sectionParagraph = texts.find(
-    (text) =>
-      text.toLowerCase().startsWith("sección:")
-  );
-
-  if (sectionParagraph) {
-    header.section = sectionParagraph
-      .replace(/^Sección:\s*/i, "")
-      .trim();
-  }
-
-  // Título
-  const titleCandidate =
-    this.findFirstTitleCandidate(
-      paragraphs,
-      resumenIndex
-    );
-
-  if (titleCandidate) {
-    header.title = titleCandidate;
-  }
-
-  // Abstract / resumen
-  const abstractParagraphs =
-    this.extractAbstractParagraphs(
-      paragraphs,
-      resumenIndex,
-      abstractIndex
-    );
-
-  if (abstractParagraphs.length > 0) {
-    header.abstract =
-      abstractParagraphs.join("\n\n");
-  }
-
-  // Keywords
-  const spanishKeywords = texts.find(
-    (text) =>
-      /^palabras\s+clave\s*:/i.test(text)
-  );
-
-  if (spanishKeywords) {
-    header.keywords =
-      this.parseListField(
-        spanishKeywords,
-        /^palabras\s+clave\s*:/i
-      );
-  }
-
-  // JEL
-  const jel = texts.find(
-    (text) =>
-      /^(c[oó]digos\s+jel|jel\s+codes?)\s*:/i.test(text)
-  );
-
-  if (jel) {
-    header.jel_codes =
-      this.parseListField(
-        jel,
-        /^(c[oó]digos\s+jel|jel\s+codes?)\s*:/i
-      );
-  }
-
-  // Fechas
-  header.dates.received =
-    this.extractField(
-      texts,
-      /^Recibido\s*:/i
-    );
-
-  header.dates.accepted =
-    this.extractField(
-      texts,
-      /^Aceptado\s*:/i
-    );
-
-  header.dates.published =
-    this.extractField(
-      texts,
-      /^Publicado\s*:/i
-    );
-
-  return header;
-}
 
   private getHeadingLevel(
     paragraph: any
   ): number | null {
-    const properties = this.findElement(
-      paragraph,
-      "w:pPr"
-    );
-
-    console.log(
-      "\n=== PARÁGRAFO ==="
-    );
-
-    console.log(
-      "Texto:",
-      this.extractParagraphText(paragraph)
-    );
-
-    console.log(
-      "pPr:",
-      JSON.stringify(
-        properties,
-        null,
-        2
-      )
-    );
+    const properties =
+      findElement(paragraph, "w:pPr");
 
     if (!properties) {
-      console.log(
-        "Resultado: sin w:pPr"
-      );
-
       return null;
     }
 
-    const style = this.findElement(
-      properties,
-      "w:pStyle"
-    );
-
-    console.log(
-      "w:pStyle:",
-      JSON.stringify(
-        style,
-        null,
-        2
-      )
-    );
+    const style =
+      findElement(properties, "w:pStyle");
 
     if (!style) {
-      console.log(
-        "Resultado: sin w:pStyle"
-      );
-
       return null;
     }
 
-    const styleId =
-      style["@_w:val"];
-
-    console.log(
-      "styleId:",
-      styleId
-    );
+    const styleId = style["@_w:val"];
 
     if (!styleId) {
-      console.log(
-        "Resultado: styleId vacío"
-      );
-
       return null;
     }
 
-    const match = String(styleId).match(
-      /Heading([1-9])/i
-    );
-
-    console.log(
-      "match Heading:",
-      match
-    );
+    const match =
+      String(styleId).match(
+        /Heading([1-9])/i
+      );
 
     if (!match) {
-      console.log(
-        "Resultado: no es Heading1-9"
-      );
-
       return null;
     }
 
-    const level = Number(
-      match[1]
-    );
-
-    console.log(
-      "Resultado:",
-      level
-    );
+    const level = Number(match[1]);
 
     return level;
   }
@@ -663,12 +572,11 @@ export class DocxParser {
     xml: string,
     type: "footnote" | "endnote"
   ): Note[] {
-    const parsed = this.xmlParser.parse(xml);
+    const parsed =
+      this.xmlParser.parse(xml);
 
-    const noteElements = this.findElements(
-      parsed,
-      `w:${type}`
-    );
+    const noteElements =
+      findElements(parsed, `w:${type}`);
 
     const notes: Note[] = [];
 
@@ -677,23 +585,17 @@ export class DocxParser {
         note["@_w:id"] ??
         note["@_w:id"];
 
-      if (rawId === undefined) {
-        continue;
-      }
+      if (rawId === undefined) continue;
 
       const id = Number(rawId);
 
-      if (id < 1) {
-        continue;
-      }
+      if (id < 1) continue;
 
-      const textNodes = this.findElements(
-        note,
-        "w:t"
-      );
+      const textNodes =
+        findElements(note, "w:t");
 
       const text = textNodes
-        .map((node) => this.extractText(node))
+        .map((node) => extractText(node))
         .join("");
 
       notes.push({
@@ -709,135 +611,41 @@ export class DocxParser {
   private attachNoteAnchors(
     body: BodyBlock[],
     notes: Note[]
-  ): void {
-  }
-
-  private extractText(node: any): string {
-    if (typeof node === "string") {
-      return node;
-    }
-
-    if (node?.["#text"] !== undefined) {
-      return String(node["#text"]);
-    }
-
-    return "";
-  }
-
-  private findElement(
-    root: any,
-    name: string
-  ): any | null {
-    if (!root) {
-      return null;
-    }
-
-    if (Array.isArray(root)) {
-      for (const item of root) {
-        const result = this.findElement(
-          item,
-          name
-        );
-
-        if (result) {
-          return result;
-        }
-      }
-
-      return null;
-    }
-
-    if (typeof root !== "object") {
-      return null;
-    }
-
-    if (root[name]) {
-      return root[name];
-    }
-
-    for (const value of Object.values(root)) {
-      const result = this.findElement(
-        value,
-        name
-      );
-
-      if (result) {
-        return result;
-      }
-    }
-
-    return null;
-  }
-
-  private findElements(
-    root: any,
-    name: string
-  ): any[] {
-    const results: any[] = [];
-
-    this.collectElements(
-      root,
-      name,
-      results
-    );
-
-    return results;
-  }
-
-  private findDirectChildren(root: any, name: string): any[] {
-    if (!Array.isArray(root)) {
-      return [];
-    }
-
-    const results: any[] = [];
-
-    for (const item of root) {
-      if (
-        item &&
-        typeof item === "object" &&
-        item[name] !== undefined
-      ) {
-        results.push(item);
-      }
-    }
-
-    return results;
-  }
+  ): void {}
 
   private findFirstTitleCandidate(
-  paragraphs: RawParagraph[],
-  resumenIndex: number
-): string | undefined {
-  for (
-    let i = 0;
-    i < resumenIndex;
-    i++
-  ) {
-    const text = paragraphs[i].text.trim();
-
-    if (!text) {
-      continue;
-    }
-
-    if (/^DOI\s*:/i.test(text)) {
-      continue;
-    }
-
-    if (/^Sección\s*:/i.test(text)) {
-      continue;
-    }
-
-    if (
-      paragraphs[i - 1]?.text
-        .trim()
-        .toLowerCase()
-        .startsWith("sección:")
+    paragraphs: RawParagraph[],
+    resumenIndex: number
+  ): string | undefined {
+    for (
+      let i = 0;
+      i < resumenIndex;
+      i++
     ) {
-      return text;
-    }
-  }
+      const text =
+        paragraphs[i].text.trim();
 
-  return undefined;
+      if (!text) continue;
+
+      if (/^DOI\s*:/i.test(text)) {
+        continue;
+      }
+
+      if (/^Sección\s*:/i.test(text)) {
+        continue;
+      }
+
+      if (
+        paragraphs[i - 1]?.text
+          .trim()
+          .toLowerCase()
+          .startsWith("sección:")
+      ) {
+        return text;
+      }
+    }
+
+    return undefined;
   }
 
   private extractAbstractParagraphs(
@@ -852,11 +660,16 @@ export class DocxParser {
       i < paragraphs.length;
       i++
     ) {
-      const text = paragraphs[i].text.trim();
+      const text =
+        paragraphs[i].text.trim();
 
       if (
-        /^Palabras\s+Clave\s*:/i.test(text) ||
-        /^C[oó]digos\s+JEL\s*:/i.test(text)
+        /^Palabras\s+Clave\s*:/i.test(
+          text
+        ) ||
+        /^C[oó]digos\s+JEL\s*:/i.test(
+          text
+        )
       ) {
         break;
       }
@@ -880,13 +693,10 @@ export class DocxParser {
     text: string,
     prefix: RegExp
   ): string[] {
-    const value = text
-      .replace(prefix, "")
-      .trim();
+    const value =
+      text.replace(prefix, "").trim();
 
-    if (!value) {
-      return [];
-    }
+    if (!value) return [];
 
     return value
       .split(";")
@@ -898,105 +708,63 @@ export class DocxParser {
     texts: string[],
     prefix: RegExp
   ): string | undefined {
-    const value = texts.find((text) =>
-      prefix.test(text)
-    );
+    const value =
+      texts.find((text) =>
+        prefix.test(text)
+      );
 
-    if (!value) {
-      return undefined;
-    }
+    if (!value) return undefined;
 
     return value
       .replace(prefix, "")
       .trim();
   }
 
-  private collectElements(
-    root: any,
-    name: string,
-    results: any[]
-  ): void {
-    if (!root) {
-      return;
-    }
-
-    if (Array.isArray(root)) {
-      for (const item of root) {
-        this.collectElements(
-          item,
-          name,
-          results
-        );
-      }
-
-      return;
-    }
-
-    if (typeof root !== "object") {
-      return;
-    }
-
-    if (root[name]) {
-      const value = root[name];
-
-      if (Array.isArray(value)) {
-        results.push(...value);
-      } else {
-        results.push(value);
-      }
-    }
-
-    for (const value of Object.values(root)) {
-      this.collectElements(
-        value,
-        name,
-        results
-      );
-    }
-  }
-
   private extractMainBody(
-  paragraphs: RawParagraph[]
-): BodyBlock[] {
-  const texts = paragraphs.map(
-    (paragraph) => paragraph.text.trim()
-  );
+    paragraphs: RawParagraph[]
+  ): BodyBlock[] {
+    const texts = paragraphs.map(
+      (paragraph) =>
+        paragraph.text.trim()
+    );
 
-  const startIndex =
-    this.findMainBodyStart(texts);
+    const startIndex =
+      this.findMainBodyStart(texts);
 
-  const mainParagraphs =
-    startIndex === -1
-      ? paragraphs
-      : paragraphs.slice(startIndex);
+    const mainParagraphs =
+      startIndex === -1
+        ? paragraphs
+        : paragraphs.slice(startIndex);
 
-  return this.buildBodyBlocks(
-    mainParagraphs
-  );
+    return this.buildBodyBlocks(
+      mainParagraphs
+    );
   }
 
   private findMainBodyStart(
-  texts: string[]
-): number {
-  const headings = [
-    "introducción",
-    "metodología",
-    "resultados",
-    "conclusiones y trabajos futuros",
-    "referencias bibliográficas",
-  ];
+    texts: string[]
+  ): number {
+    const headings = [
+      "introducción",
+      "metodología",
+      "resultados",
+      "conclusiones y trabajos futuros",
+      "referencias bibliográficas",
+    ];
 
-  for (let i = 0; i < texts.length; i++) {
-    const normalized =
-      texts[i]
-        .trim()
-        .toLowerCase();
+    for (
+      let i = 0;
+      i < texts.length;
+      i++
+    ) {
+      const normalized =
+        texts[i].trim().toLowerCase();
 
-    if (headings.includes(normalized)) {
-      return i;
+      if (headings.includes(normalized)) {
+        return i;
+      }
     }
-  }
 
-  return -1;
+    return -1;
   }
 }
