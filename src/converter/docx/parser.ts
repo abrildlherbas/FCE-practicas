@@ -440,87 +440,128 @@ export class DocxParser {
       (paragraph) => paragraph.text.trim()
     );
 
-    const resumenIndex = texts.findIndex(
-      (text) =>
-        text.toUpperCase() === "RESUMEN"
-    );
-
-    const abstractIndex = texts.findIndex(
-      (text) =>
-        text.toUpperCase() === "ABSTRACT"
-    );
-
-    if (resumenIndex === -1) {
-      return header;
-    }
-
-    const doiParagraph = texts.find(
-      (text) =>
-        text
-          .toUpperCase()
-          .startsWith("DOI:")
-    );
-
-    if (doiParagraph) {
-      header.doi = doiParagraph
-        .replace(/^DOI:\s*/i, "")
-        .trim();
-    }
-
-    const sectionParagraph = texts.find(
-      (text) =>
-        text
-          .toLowerCase()
-          .startsWith("sección:")
-    );
-
-    if (sectionParagraph) {
-      header.section = sectionParagraph
-        .replace(/^Sección:\s*/i, "")
-        .trim();
-    }
-
+    /*
+    * Título
+    */
     const titleCandidate =
       this.findFirstTitleCandidate(
         paragraphs,
-        resumenIndex
+        texts.length
       );
 
     if (titleCandidate) {
       header.title = titleCandidate;
     }
 
-    const abstractParagraphs =
-      this.extractAbstractParagraphs(
-        paragraphs,
-        resumenIndex,
-        abstractIndex
+    /*
+    * Autor
+    */
+    const titleIndex =
+      titleCandidate
+        ? texts.findIndex(
+            (text) => text === titleCandidate
+          )
+        : -1;
+
+    if (
+      titleIndex !== -1 &&
+      texts[titleIndex + 1]
+    ) {
+      const author =
+        texts[titleIndex + 1].trim();
+
+      if (
+        author &&
+        !this.isMetadataText(author)
+      ) {
+        header.authors = [author];
+      }
+    }
+
+    /*
+    * ORCID
+    */
+    const orcid =
+      texts
+        .join(" ")
+        .match(
+          /https?:\/\/orcid\.org\/([0-9]{4}-[0-9]{4}-[0-9]{4}-[0-9]{4})/i
+        );
+
+    if (orcid) {
+      header.orcid = orcid[1];
+    }
+
+    /*
+    * DOI
+    */
+    const doi =
+      texts
+        .join(" ")
+        .match(
+          /(?:https?:\/\/doi\.org\/|DOI\s*:\s*)(10\.\S+)/i
+        );
+
+    if (doi) {
+      header.doi = doi[1]
+        .replace(/[.,;]+$/, "");
+    }
+
+    /*
+    * Sección
+    */
+    const sectionParagraph =
+      texts.find(
+        (text) =>
+          text
+            .toLowerCase()
+            .startsWith("sección:")
       );
 
-    if (abstractParagraphs.length > 0) {
-      header.abstract =
-        abstractParagraphs.join("\n\n");
+    if (sectionParagraph) {
+      header.section =
+        sectionParagraph
+          .replace(/^Sección\s*:\s*/i, "")
+          .trim();
     }
 
-    const spanishKeywords = texts.find(
-      (text) =>
-        /^palabras\s+clave\s*:/i.test(text)
-    );
+    /*
+    * Palabras clave
+    */
+    const keywordsParagraph =
+      texts.find(
+        (text) =>
+          /^palabras\s+clave/i.test(text)
+      );
 
-    if (spanishKeywords) {
-      header.keywords =
-        this.parseListField(
-          spanishKeywords,
-          /^palabras\s+clave\s*:/i
-        );
+    if (keywordsParagraph) {
+      const keywords =
+        keywordsParagraph
+          .replace(
+            /^palabras\s+clave\s*:?\s*/i,
+            ""
+          )
+          .replace(/[.!]\s*$/, "")
+          .split(",")
+          .map(
+            (keyword) =>
+              keyword.trim()
+          )
+          .filter(Boolean);
+
+      header.keywords = keywords;
     }
 
-    const jel = texts.find(
-      (text) =>
-        /^(c[oó]digos\s+jel|jel\s+codes?)\s*:/i.test(
-          text
-        )
-    );
+    /*
+    * JEL
+    */
+    const jel =
+      texts.find(
+        (text) =>
+          /^(c[oó]digos\s+jel|jel\s+codes?)\s*:/i.test(
+            text
+          )
+      );
 
     if (jel) {
       header.jel_codes =
@@ -530,25 +571,64 @@ export class DocxParser {
         );
     }
 
-    header.dates.received =
-      this.extractField(
-        texts,
-        /^Recibido\s*:/i
+    /*
+    * Fechas
+    *
+    * En este documento están dentro del mismo
+    * párrafo:
+    *
+    * Recibido: 3/2025Aceptado: 5/2025
+    */
+    const fullText =
+      texts.join(" ");
+
+    const received =
+      fullText.match(
+        /Recibido\s*:\s*([0-9]{1,2}\/[0-9]{4})/i
       );
 
-    header.dates.accepted =
-      this.extractField(
-        texts,
-        /^Aceptado\s*:/i
+    if (received) {
+      header.dates.received =
+        received[1];
+    }
+
+    const accepted =
+      fullText.match(
+        /Aceptado\s*:\s*([0-9]{1,2}\/[0-9]{4})/i
       );
 
-    header.dates.published =
-      this.extractField(
-        texts,
-        /^Publicado\s*:/i
+    if (accepted) {
+      header.dates.accepted =
+        accepted[1];
+    }
+
+    const published =
+      fullText.match(
+        /Publicado\s*:\s*([^]+?)(?=\s+(?:Palabras|Resumen|Abstract)|$)/i
       );
+
+    if (published) {
+      header.dates.published =
+        published[1].trim();
+    }
 
     return header;
+  }
+
+  private isMetadataText(
+    text: string
+  ): boolean {
+    return (
+      /^https?:\/\//i.test(text) ||
+      /@/.test(text) ||
+      /^doi\s*:/i.test(text) ||
+      /^sección\s*:/i.test(text) ||
+      /^recibido\s*:/i.test(text) ||
+      /^aceptado\s*:/i.test(text) ||
+      /^publicado\s*:/i.test(text) ||
+      /^palabras\s+clave/i.test(text) ||
+      /^c[oó]digos\s+jel/i.test(text)
+    );
   }
 
   private getHeadingLevel(
@@ -635,34 +715,31 @@ export class DocxParser {
 
   private findFirstTitleCandidate(
     paragraphs: RawParagraph[],
-    resumenIndex: number
+    endIndex: number
   ): string | undefined {
     for (
       let i = 0;
-      i < resumenIndex;
+      i < endIndex;
       i++
     ) {
       const text =
         paragraphs[i].text.trim();
 
-      if (!text) continue;
-
-      if (/^DOI\s*:/i.test(text)) {
-        continue;
-      }
-
-      if (/^Sección\s*:/i.test(text)) {
+      if (!text) {
         continue;
       }
 
       if (
-        paragraphs[i - 1]?.text
-          .trim()
-          .toLowerCase()
-          .startsWith("sección:")
+        /^DOI\s*:/i.test(text) ||
+        /^Sección\s*:/i.test(text) ||
+        /^Palabras\s+clave/i.test(text) ||
+        /^https?:\/\//i.test(text) ||
+        /@/.test(text)
       ) {
-        return text;
+        continue;
       }
+
+      return text;
     }
 
     return undefined;
@@ -773,20 +850,20 @@ export class DocxParser {
     texts: string[]
   ): number {
     const headings = [
-      "introducción",
-      "metodología",
+      "introduccion",
+      "metodologia",
       "resultados",
       "conclusiones y trabajos futuros",
-      "referencias bibliográficas",
+      "referencias bibliograficas",
     ];
 
-    for (
-      let i = 0;
-      i < texts.length;
-      i++
-    ) {
+    for (let i = 0; i < texts.length; i++) {
       const normalized =
-        texts[i].trim().toLowerCase();
+        texts[i]
+          .normalize("NFD")
+          .replace(/\p{M}/gu, "")
+          .trim()
+          .toLowerCase();
 
       if (headings.includes(normalized)) {
         return i;

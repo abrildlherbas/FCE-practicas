@@ -14,6 +14,7 @@ export interface Article {
     jel_codes: string[];
 
     doi?: string;
+    orcid?: string;
     section?: string;
 
     dates: {
