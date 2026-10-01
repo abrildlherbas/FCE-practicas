@@ -6,7 +6,8 @@ import {
   Article,
   BodyBlock,
   Note,
-  InlineRun
+  InlineRun,
+  Reference
 } from "../models/Article";
 
 import {
@@ -27,6 +28,7 @@ interface RawParagraph {
 interface ParsedStructure {
   header: Article["header"];
   body: BodyBlock[];
+  references: Reference[];
 }
 
 export class DocxParser {
@@ -79,12 +81,17 @@ export class DocxParser {
       header: structure.header,
       body: structure.body,
       notes: [...footnotes, ...endnotes],
-      references: [],
+      references: structure.references,
     };
   }
 
-  private parseDocumentStructure(document: any): ParsedStructure {
-    const body = findElement(document, "w:body");
+  private parseDocumentStructure(
+    document: any
+  ): ParsedStructure {
+    const body = findElement(
+      document,
+      "w:body"
+    );
 
     if (!body) {
       return {
@@ -95,20 +102,33 @@ export class DocxParser {
           dates: {},
         },
         body: [],
+        references: [],
       };
     }
 
-    const rawParagraphs = this.extractBodyParagraphs(body);
+    const rawParagraphs =
+      this.extractBodyParagraphs(body);
+
     const normalizedParagraphs =
       this.normalizeBlocks(rawParagraphs);
 
-    const header = this.extractHeader(normalizedParagraphs);
+    const header =
+      this.extractHeader(normalizedParagraphs);
+
     const bodyBlocks =
-      this.extractMainBody(normalizedParagraphs);
+      this.extractMainBody(
+        normalizedParagraphs
+      );
+
+    const references =
+      this.extractReferences(
+        normalizedParagraphs
+      );
 
     return {
       header,
       body: bodyBlocks,
+      references,
     };
   }
 
@@ -724,17 +744,25 @@ export class DocxParser {
     paragraphs: RawParagraph[]
   ): BodyBlock[] {
     const texts = paragraphs.map(
-      (paragraph) =>
-        paragraph.text.trim()
+      (paragraph) => paragraph.text.trim()
     );
 
     const startIndex =
       this.findMainBodyStart(texts);
 
+    const endIndex =
+      this.findReferencesStart(
+        texts,
+        startIndex
+      );
+
     const mainParagraphs =
-      startIndex === -1
-        ? paragraphs
-        : paragraphs.slice(startIndex);
+      paragraphs.slice(
+        startIndex === -1 ? 0 : startIndex,
+        endIndex === -1
+          ? paragraphs.length
+          : endIndex
+      );
 
     return this.buildBodyBlocks(
       mainParagraphs
@@ -767,4 +795,88 @@ export class DocxParser {
 
     return -1;
   }
+
+  private findReferencesStart(
+    texts: string[],
+    startIndex: number
+  ): number {
+    for (
+      let i = Math.max(startIndex, 0);
+      i < texts.length;
+      i++
+    ) {
+      const normalized =
+        texts[i]
+          .normalize("NFD")
+          .replace(/\p{M}/gu, "")
+          .trim()
+          .toLowerCase();
+
+      if (
+        normalized ===
+        "referencias bibliograficas"
+      ) {
+        return i;
+      }
+    }
+
+    return -1;
+  }
+
+  private extractReferences(
+    paragraphs: RawParagraph[]
+  ): Reference[] {
+    const texts = paragraphs.map(
+      (paragraph) => paragraph.text.trim()
+    );
+
+    const startIndex =
+      this.findReferencesStart(
+        texts,
+        0
+      );
+
+    if (startIndex === -1) {
+      return [];
+    }
+
+    const referenceParagraphs =
+      paragraphs.slice(startIndex + 1);
+
+    const references: Reference[] = [];
+
+    for (const paragraph of referenceParagraphs) {
+      const text =
+        paragraph.text.trim();
+
+      if (!text) {
+        continue;
+      }
+
+      const last =
+        references[references.length - 1];
+
+      if (
+        this.isUrl(text) &&
+        last
+      ) {
+        last.text += ` ${text}`;
+        continue;
+      }
+
+      references.push({
+        id: String(references.length + 1),
+        text,
+      });
+    }
+
+    return references;
+  }
+
+  private isUrl(
+    text: string
+  ): boolean {
+    return /^https?:\/\//i.test(text);
+  }
+
 }
