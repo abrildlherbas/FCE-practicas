@@ -1,14 +1,46 @@
+function hasOwn(
+  object: any,
+  property: string
+): boolean {
+  return Object.prototype.hasOwnProperty.call(object, property);
+}
+
+function isMcFallback(
+  node: any
+): boolean {
+  return (
+    node !== null &&
+    typeof node === "object" &&
+    !Array.isArray(node) &&
+    hasOwn(node, "mc:Fallback")
+  );
+}
+
 export function findElement(
   root: any,
   name: string
 ): any | null {
-  if (!root) return null;
+  return findElementRecursive(root, name, false);
+}
+
+function findElementRecursive(
+  root: any,
+  name: string,
+  insideFallback: boolean
+): any | null {
+  if (!root) {
+    return null;
+  }
 
   if (Array.isArray(root)) {
     for (const item of root) {
-      const result = findElement(item, name);
+      const result = findElementRecursive(
+        item,
+        name,
+        insideFallback
+      );
 
-      if (result) {
+      if (result !== null) {
         return result;
       }
     }
@@ -20,14 +52,39 @@ export function findElement(
     return null;
   }
 
-  if (root[name]) {
+  /*
+   * Si estamos dentro de mc:Fallback, ignoramos su contenido.
+   *
+   * Excepción: si explícitamente estamos buscando mc:Fallback,
+   * permitimos encontrar el propio nodo.
+   */
+  if (
+    name !== "mc:Fallback" &&
+    (insideFallback || isMcFallback(root))
+  ) {
+    return null;
+  }
+
+  if (root[name] !== undefined) {
     return root[name];
   }
 
-  for (const value of Object.values(root)) {
-    const result = findElement(value, name);
+  const nextInsideFallback =
+    insideFallback || isMcFallback(root);
 
-    if (result) {
+  for (const [key, value] of Object.entries(root)) {
+    // Los atributos no contienen estructura XML que nos interese recorrer.
+    if (key === ":@") {
+      continue;
+    }
+
+    const result = findElementRecursive(
+      value,
+      name,
+      nextInsideFallback
+    );
+
+    if (result !== null) {
       return result;
     }
   }
@@ -41,7 +98,12 @@ export function findElements(
 ): any[] {
   const results: any[] = [];
 
-  collectElements(root, name, results);
+  collectElements(
+    root,
+    name,
+    results,
+    false
+  );
 
   return results;
 }
@@ -60,6 +122,7 @@ export function findDirectChildren(
     if (
       item &&
       typeof item === "object" &&
+      !Array.isArray(item) &&
       item[name] !== undefined
     ) {
       results.push(item);
@@ -72,7 +135,8 @@ export function findDirectChildren(
 function collectElements(
   root: any,
   name: string,
-  results: any[]
+  results: any[],
+  insideFallback: boolean
 ): void {
   if (!root) {
     return;
@@ -80,7 +144,12 @@ function collectElements(
 
   if (Array.isArray(root)) {
     for (const item of root) {
-      collectElements(item, name, results);
+      collectElements(
+        item,
+        name,
+        results,
+        insideFallback
+      );
     }
 
     return;
@@ -90,7 +159,18 @@ function collectElements(
     return;
   }
 
-  if (root[name]) {
+  /*
+   * No extraemos ningún contenido que esté dentro de
+   * mc:Fallback.
+   */
+  if (
+    name !== "mc:Fallback" &&
+    (insideFallback || isMcFallback(root))
+  ) {
+    return;
+  }
+
+  if (root[name] !== undefined) {
     const value = root[name];
 
     if (Array.isArray(value)) {
@@ -100,6 +180,22 @@ function collectElements(
     }
 
     return;
+  }
+
+  const nextInsideFallback =
+    insideFallback || isMcFallback(root);
+
+  for (const [key, value] of Object.entries(root)) {
+    if (key === ":@") {
+      continue;
+    }
+
+    collectElements(
+      value,
+      name,
+      results,
+      nextInsideFallback
+    );
   }
 }
 
