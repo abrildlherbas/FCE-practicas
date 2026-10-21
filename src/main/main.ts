@@ -1,4 +1,5 @@
 import { app, BrowserWindow, dialog, ipcMain } from "electron";
+import fs from "node:fs/promises";
 import path from "node:path";
 
 import { DocxReader } from "../converter/docx/reader";
@@ -8,6 +9,64 @@ declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string | undefined;
 declare const MAIN_WINDOW_VITE_NAME: string;
 
 let mainWindow: BrowserWindow | null = null;
+let selectedDocumentPath: string | null = null;
+
+function imageMimeType(fileName: string): string {
+  const extension = path.extname(fileName).toLowerCase();
+  const types: Record<string, string> = {
+    ".apng": "image/apng",
+    ".avif": "image/avif",
+    ".bmp": "image/bmp",
+    ".gif": "image/gif",
+    ".jpeg": "image/jpeg",
+    ".jpg": "image/jpeg",
+    ".png": "image/png",
+    ".svg": "image/svg+xml",
+    ".tif": "image/tiff",
+    ".tiff": "image/tiff",
+    ".webp": "image/webp",
+  };
+
+  return types[extension] ?? "application/octet-stream";
+}
+
+async function inlineArticleImages(html: string): Promise<string> {
+  if (!selectedDocumentPath) {
+    throw new Error("No hay un documento abierto para preparar.");
+  }
+
+  const assetDirectoryName =
+    `${path.parse(selectedDocumentPath).name}_assets`;
+  const imagePaths = Array.from(
+    html.matchAll(/src="([^"]+)"/g),
+    (match) => match[1]
+  ).filter((source) => source.startsWith(`${assetDirectoryName}/`));
+  let preparedHtml = html;
+
+  for (const imagePath of new Set(imagePaths)) {
+    const fileName = imagePath.slice(assetDirectoryName.length + 1);
+    if (!fileName || path.basename(fileName) !== fileName) {
+      throw new Error("La ruta de una imagen del artículo no es válida.");
+    }
+
+    const imageBuffer = await fs.readFile(
+      path.join(
+        path.dirname(selectedDocumentPath),
+        assetDirectoryName,
+        fileName
+      )
+    );
+    const dataUrl = `data:${imageMimeType(fileName)};base64,${imageBuffer.toString(
+      "base64"
+    )}`;
+    preparedHtml = preparedHtml.replaceAll(
+      `src="${imagePath}"`,
+      `src="${dataUrl}"`
+    );
+  }
+
+  return preparedHtml;
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -42,8 +101,8 @@ ipcMain.handle("select-document", async () => {
     properties: ["openFile"],
     filters: [
       {
-        name: "Documentos Word",
-        extensions: ["doc", "docx"],
+        name: "Documento Word",
+        extensions: ["docx"],
       },
     ],
   });
@@ -52,7 +111,8 @@ ipcMain.handle("select-document", async () => {
     return null;
   }
 
-  return result.filePaths[0];
+  selectedDocumentPath = result.filePaths[0];
+  return selectedDocumentPath;
 });
 
 ipcMain.handle(
@@ -74,6 +134,42 @@ ipcMain.handle(
     return parser.parse(zip, filePath);
   }
 );
+
+ipcMain.handle("prepare-preview", async (_event, html: unknown) => {
+  if (typeof html !== "string") {
+    throw new Error("No se pudo preparar la vista del artículo.");
+  }
+
+  return inlineArticleImages(html);
+});
+
+ipcMain.handle("export-article", async (_event, html: unknown) => {
+  if (!mainWindow || !selectedDocumentPath) {
+    throw new Error("Elige primero un documento Word.");
+  }
+  if (typeof html !== "string") {
+    throw new Error("No se pudo preparar el artículo para guardarlo.");
+  }
+
+  const source = path.parse(selectedDocumentPath);
+  const result = await dialog.showSaveDialog(mainWindow, {
+    title: "Guardar artículo",
+    defaultPath: path.join(source.dir, `${source.name}.html`),
+    buttonLabel: "Guardar artículo",
+    filters: [
+      {
+        name: "Artículo",
+        extensions: ["html"],
+      },
+    ],
+  });
+
+  if (result.canceled || !result.filePath) return null;
+
+  const htmlWithImages = await inlineArticleImages(html);
+  await fs.writeFile(result.filePath, htmlWithImages, "utf8");
+  return result.filePath;
+});
 
 app.whenReady().then(() => {
   createWindow();

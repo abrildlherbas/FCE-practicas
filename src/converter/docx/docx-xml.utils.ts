@@ -216,7 +216,9 @@ export function extractText(
 export function readWId(
   node: any
 ): number | null {
-  const raw = node["@_w:id"];
+  const raw =
+    node?.[":@"]?.["@_w:id"] ??
+    node?.["@_w:id"];
 
   if (raw === undefined) {
     return null;

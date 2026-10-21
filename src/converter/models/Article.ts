@@ -9,6 +9,7 @@ export interface Article {
     title?: string;
     title_en?: string;
     authors: string[];
+    affiliations: string[];
     abstract?: string;
     keywords: string[];
     jel_codes: string[];
@@ -29,6 +30,14 @@ export interface Article {
   notes: Note[];
 
   references: Reference[];
+
+  warnings: ParseWarning[];
+}
+
+export interface ParseWarning {
+  code: string;
+  message: string;
+  blockIndex?: number;
 }
 
 export interface Note {
@@ -43,8 +52,10 @@ export interface Note {
 }
 
 export interface Reference {
-  id: string;
-  text: string;
+  raw: string;
+  authors?: string[];
+  year?: number;
+  doi?: string;
 }
 
 export type InlineRun =
@@ -62,4 +73,21 @@ export interface ParagraphBlock {
   runs: InlineRun[];
 }
 
-export type BodyBlock = HeadingBlock | ParagraphBlock;
+export interface TableBlock {
+  type: "table";
+  headers: string[];
+  rows: string[][];
+}
+
+export interface ImageBlock {
+  type: "image";
+  rId: string;
+  fileName: string;
+  alt?: string;
+}
+
+export type BodyBlock =
+  | HeadingBlock
+  | ParagraphBlock
+  | TableBlock
+  | ImageBlock;

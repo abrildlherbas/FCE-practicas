@@ -7,6 +7,7 @@ import {
   BodyBlock,
   Note,
   InlineRun,
+  ParseWarning,
   Reference
 } from "../models/Article";
 
@@ -17,18 +18,80 @@ import {
   extractText,
   readWId,
 } from "./docx-xml.utils";
+import { HeaderExtractor } from "./HeaderExtractor";
+import { NoteDetector } from "./NoteDetector";
+import { StylesResolver } from "./StylesResolver";
+import { DocxBodyBlockExtractor } from "./DocxBodyBlockExtractor";
 
 interface RawParagraph {
   xml: any;
   runs: InlineRun[];
   text: string;
   headingLevel: number | null;
+  blockIndex: number;
+  styleId: string | null;
+  sizeHalfPoints: string | null;
+  hasSuperscriptPrefix: boolean;
 }
 
 interface ParsedStructure {
   header: Article["header"];
   body: BodyBlock[];
   references: Reference[];
+  warnings: ParseWarning[];
+}
+
+type XmlRecord = Record<string, unknown>;
+
+function asXmlRecord(value: unknown): XmlRecord | null {
+  if (
+    value === null ||
+    typeof value !== "object" ||
+    Array.isArray(value)
+  ) {
+    return null;
+  }
+
+  return value as XmlRecord;
+}
+
+function getXmlName(node: unknown): string | null {
+  const record = asXmlRecord(node);
+  if (!record) return null;
+
+  return Object.keys(record).find(
+    (key) => key !== ":@" && !key.startsWith("#")
+  ) ?? null;
+}
+
+function collectXmlNodes(
+  node: unknown,
+  name: string,
+  results: unknown[] = []
+): unknown[] {
+  if (Array.isArray(node)) {
+    for (const child of node) {
+      collectXmlNodes(child, name, results);
+    }
+
+    return results;
+  }
+
+  const record = asXmlRecord(node);
+  if (!record) return results;
+
+  if (getXmlName(node) === name) {
+    results.push(node);
+    return results;
+  }
+
+  for (const [key, value] of Object.entries(record)) {
+    if (key !== ":@" && !key.startsWith("#")) {
+      collectXmlNodes(value, name, results);
+    }
+  }
+
+  return results;
 }
 
 export class DocxParser {
@@ -54,8 +117,24 @@ export class DocxParser {
       zip,
       "word/endnotes.xml"
     );
+    const stylesXml = await this.readOptional(
+      zip,
+      "word/styles.xml"
+    );
+    const relationshipsXml = await this.readOptional(
+      zip,
+      "word/_rels/document.xml.rels"
+    );
 
     const document = this.xmlParser.parse(documentXml);
+    const stylesResolver = new StylesResolver(stylesXml);
+    const extractedBlocks =
+      await new DocxBodyBlockExtractor().extract(
+        documentXml,
+        relationshipsXml,
+        zip,
+        sourcePath
+      );
 
     const footnotes = footnotesXml
       ? this.parseNotes(footnotesXml, "footnote")
@@ -65,7 +144,12 @@ export class DocxParser {
       ? this.parseNotes(endnotesXml, "endnote")
       : [];
 
-    const structure = this.parseDocumentStructure(document);
+    const structure = this.parseDocumentStructure(
+      document,
+      stylesResolver,
+      [...footnotes, ...endnotes],
+      extractedBlocks
+    );
 
     this.attachNoteAnchors(
       structure.body,
@@ -82,11 +166,18 @@ export class DocxParser {
       body: structure.body,
       notes: [...footnotes, ...endnotes],
       references: structure.references,
+      warnings: structure.warnings,
     };
   }
 
   private parseDocumentStructure(
-    document: any
+    document: any,
+    stylesResolver: StylesResolver,
+    nativeNotes: Note[],
+    extractedBlocks: {
+      blocksByBodyIndex: Map<number, BodyBlock[]>;
+      warnings: ParseWarning[];
+    }
   ): ParsedStructure {
     const body = findElement(
       document,
@@ -94,41 +185,70 @@ export class DocxParser {
     );
 
     if (!body) {
+      const headerExtraction =
+        new HeaderExtractor().extract([]);
+
       return {
-        header: {
-          authors: [],
-          keywords: [],
-          jel_codes: [],
-          dates: {},
-        },
+        header: headerExtraction.header,
         body: [],
         references: [],
+        warnings: headerExtraction.warnings,
       };
     }
 
     const rawParagraphs =
-      this.extractBodyParagraphs(body);
+      this.extractBodyParagraphs(body, stylesResolver);
+    const headerExtraction = new HeaderExtractor().extract(
+      rawParagraphs.map((paragraph) => ({
+        blockIndex: paragraph.blockIndex,
+        text: paragraph.text,
+        styleId: paragraph.styleId,
+        sizeHalfPoints: paragraph.sizeHalfPoints,
+      }))
+    );
+    const warnings = this.collectWarnings(
+      body,
+      rawParagraphs,
+      stylesResolver,
+      new Set(extractedBlocks.blocksByBodyIndex.keys())
+    );
+    warnings.push(...extractedBlocks.warnings);
+    warnings.push(...headerExtraction.warnings);
+
+    const mainBodyStart = this.findMainBodyStart(
+      rawParagraphs.map((paragraph) => paragraph.text.trim())
+    );
+    const noteDetection = new NoteDetector().detect(
+      rawParagraphs.map((paragraph) => ({
+        blockIndex: paragraph.blockIndex,
+        text: paragraph.text,
+        sizeHalfPoints: paragraph.sizeHalfPoints,
+        hasSuperscriptPrefix: paragraph.hasSuperscriptPrefix,
+      })),
+      nativeNotes,
+      mainBodyStart < 0
+        ? null
+        : rawParagraphs[mainBodyStart].blockIndex
+    );
+    warnings.push(...noteDetection.warnings);
 
     const normalizedParagraphs =
       this.normalizeBlocks(rawParagraphs);
 
-    const header =
-      this.extractHeader(normalizedParagraphs);
-
     const bodyBlocks =
       this.extractMainBody(
-        normalizedParagraphs
-      );
-
-    const references =
-      this.extractReferences(
-        normalizedParagraphs
+        normalizedParagraphs,
+        headerExtraction.consumedBlockIndexes,
+        noteDetection.consumedNoteBlockIndexes,
+        noteDetection.referenceHeadingBlockIndex,
+        extractedBlocks.blocksByBodyIndex
       );
 
     return {
-      header,
+      header: headerExtraction.header,
       body: bodyBlocks,
-      references,
+      references: noteDetection.references,
+      warnings,
     };
   }
 
@@ -159,23 +279,125 @@ export class DocxParser {
   }
 
   private extractBodyParagraphs(
-    body: any
+    body: any,
+    stylesResolver: StylesResolver
   ): RawParagraph[] {
     const paragraphElements =
       findDirectChildren(body, "w:p");
+    const directElements = Array.isArray(body)
+      ? body.filter((child) => getXmlName(child) !== null)
+      : [];
 
     return paragraphElements.map(
-      (paragraph): RawParagraph => {
-        const runs = this.parseRuns(paragraph);
+      (paragraph, paragraphIndex): RawParagraph => {
+        const runs = this.parseRuns(paragraph, stylesResolver);
+        const firstRun =
+          collectXmlNodes(paragraph, "w:r")[0] ?? null;
+        const firstRunSize = firstRun
+          ? stylesResolver.resolveRunProps(
+              paragraph,
+              firstRun
+            ).sizeHalfPoints
+          : null;
+        const firstTextRun = collectXmlNodes(
+          paragraph,
+          "w:r"
+        ).find((run) => this.extractRunText(run) !== "") ?? null;
 
         return {
           xml: paragraph,
           runs,
           text: this.extractParagraphText(paragraph),
           headingLevel: this.getHeadingLevel(paragraph),
+          blockIndex: Array.isArray(body)
+            ? Math.max(directElements.indexOf(paragraph), 0)
+            : paragraphIndex,
+          styleId:
+            stylesResolver.getParagraphStyleId(paragraph),
+          sizeHalfPoints: firstRunSize,
+          hasSuperscriptPrefix:
+            firstTextRun !== null &&
+            stylesResolver.isSuperscript(
+              paragraph,
+              firstTextRun
+            ),
         };
       }
     );
+  }
+
+  private collectWarnings(
+    body: any,
+    paragraphs: RawParagraph[],
+    stylesResolver: StylesResolver,
+    recognizedBlockIndexes: Set<number>
+  ): ParseWarning[] {
+    const warnings: ParseWarning[] = [];
+    const bodyChildren = Array.isArray(body) ? body : [];
+
+    let blockIndex = -1;
+    for (const child of bodyChildren) {
+      const name = getXmlName(child);
+      if (!name) continue;
+      blockIndex++;
+
+      if (
+        name !== "w:p" &&
+        name !== "w:sectPr" &&
+        !recognizedBlockIndexes.has(blockIndex)
+      ) {
+        warnings.push({
+          code: "unclassified-element",
+          message: `El elemento ${name} del cuerpo no se convirtió a un bloque del artículo.`,
+          blockIndex,
+        });
+      }
+    }
+
+    for (let index = 1; index < paragraphs.length - 1; index++) {
+      const previousLength =
+        paragraphs[index - 1].text.trim().length;
+      const currentLength =
+        paragraphs[index].text.trim().length;
+      const nextLength =
+        paragraphs[index + 1].text.trim().length;
+
+      if (
+        previousLength > 0 &&
+        previousLength <= 20 &&
+        currentLength > 0 &&
+        currentLength <= 20 &&
+        nextLength > 0 &&
+        nextLength <= 20
+      ) {
+        warnings.push({
+          code: "short-paragraph-cluster",
+          message:
+            "Este párrafo breve está entre otros dos párrafos breves; podría ser un fragmento de texto.",
+          blockIndex: paragraphs[index].blockIndex,
+        });
+      }
+    }
+
+    for (const paragraph of paragraphs) {
+      const runs = collectXmlNodes(paragraph.xml, "w:r");
+
+      for (const run of runs) {
+        const runText = this.extractRunText(run);
+        if (!runText) continue;
+
+        if (!stylesResolver.resolveRunProps(paragraph.xml, run).sizeHalfPoints) {
+          warnings.push({
+            code: "unresolved-run-size",
+            message:
+              "No se pudo resolver el tamaño de fuente de este run.",
+            blockIndex: paragraph.blockIndex,
+          });
+        }
+      }
+    }
+
+    return warnings;
   }
 
   private normalizeBlocks(
@@ -318,7 +540,8 @@ export class DocxParser {
   }
 
   private parseRuns(
-    paragraph: any
+    paragraph: any,
+    stylesResolver: StylesResolver
   ): InlineRun[] {
     const runElements =
       findElements(paragraph, "w:r");
@@ -327,7 +550,7 @@ export class DocxParser {
 
     for (const run of runElements) {
       const footnoteRef =
-        findElement(run, "w:footnoteReference");
+        collectXmlNodes(run, "w:footnoteReference")[0];
 
       if (footnoteRef) {
         const id = readWId(footnoteRef);
@@ -344,7 +567,7 @@ export class DocxParser {
       }
 
       const endnoteRef =
-        findElement(run, "w:endnoteReference");
+        collectXmlNodes(run, "w:endnoteReference")[0];
 
       if (endnoteRef) {
         const id = readWId(endnoteRef);
@@ -365,7 +588,7 @@ export class DocxParser {
       if (!text) continue;
 
       const { bold, italic } =
-        this.extractRunFormatting(run);
+        stylesResolver.resolveRunProps(paragraph, run);
 
       result.push({
         type: "text",
@@ -387,34 +610,6 @@ export class DocxParser {
       .join("");
   }
 
-  private extractRunFormatting(
-    run: any
-  ): {
-    bold: boolean;
-    italic: boolean;
-  } {
-    const properties =
-      findElement(run, "w:rPr");
-
-    if (!properties) {
-      return {
-        bold: false,
-        italic: false,
-      };
-    }
-
-    const bold =
-      findElement(properties, "w:b") !== null;
-
-    const italic =
-      findElement(properties, "w:i") !== null;
-
-    return {
-      bold,
-      italic,
-    };
-  }
-
   private extractParagraphText(
     paragraph: any
   ): string {
@@ -424,211 +619,6 @@ export class DocxParser {
     return texts
       .map((node) => extractText(node))
       .join("");
-  }
-
-  private extractHeader(
-    paragraphs: RawParagraph[]
-  ): Article["header"] {
-    const header: Article["header"] = {
-      authors: [],
-      keywords: [],
-      jel_codes: [],
-      dates: {},
-    };
-
-    const texts = paragraphs.map(
-      (paragraph) => paragraph.text.trim()
-    );
-
-    /*
-    * Título
-    */
-    const titleCandidate =
-      this.findFirstTitleCandidate(
-        paragraphs,
-        texts.length
-      );
-
-    if (titleCandidate) {
-      header.title = titleCandidate;
-    }
-
-    /*
-    * Autor
-    */
-    const titleIndex =
-      titleCandidate
-        ? texts.findIndex(
-            (text) => text === titleCandidate
-          )
-        : -1;
-
-    if (
-      titleIndex !== -1 &&
-      texts[titleIndex + 1]
-    ) {
-      const author =
-        texts[titleIndex + 1].trim();
-
-      if (
-        author &&
-        !this.isMetadataText(author)
-      ) {
-        header.authors = [author];
-      }
-    }
-
-    /*
-    * ORCID
-    */
-    const orcid =
-      texts
-        .join(" ")
-        .match(
-          /https?:\/\/orcid\.org\/([0-9]{4}-[0-9]{4}-[0-9]{4}-[0-9]{4})/i
-        );
-
-    if (orcid) {
-      header.orcid = orcid[1];
-    }
-
-    /*
-    * DOI
-    */
-    const doi =
-      texts
-        .join(" ")
-        .match(
-          /(?:https?:\/\/doi\.org\/|DOI\s*:\s*)(10\.\S+)/i
-        );
-
-    if (doi) {
-      header.doi = doi[1]
-        .replace(/[.,;]+$/, "");
-    }
-
-    /*
-    * Sección
-    */
-    const sectionParagraph =
-      texts.find(
-        (text) =>
-          text
-            .toLowerCase()
-            .startsWith("sección:")
-      );
-
-    if (sectionParagraph) {
-      header.section =
-        sectionParagraph
-          .replace(/^Sección\s*:\s*/i, "")
-          .trim();
-    }
-
-    /*
-    * Palabras clave
-    */
-    const keywordsParagraph =
-      texts.find(
-        (text) =>
-          /^palabras\s+clave/i.test(text)
-      );
-
-    if (keywordsParagraph) {
-      const keywords =
-        keywordsParagraph
-          .replace(
-            /^palabras\s+clave\s*:?\s*/i,
-            ""
-          )
-          .replace(/[.!]\s*$/, "")
-          .split(",")
-          .map(
-            (keyword) =>
-              keyword.trim()
-          )
-          .filter(Boolean);
-
-      header.keywords = keywords;
-    }
-
-    /*
-    * JEL
-    */
-    const jel =
-      texts.find(
-        (text) =>
-          /^(c[oó]digos\s+jel|jel\s+codes?)\s*:/i.test(
-            text
-          )
-      );
-
-    if (jel) {
-      header.jel_codes =
-        this.parseListField(
-          jel,
-          /^(c[oó]digos\s+jel|jel\s+codes?)\s*:/i
-        );
-    }
-
-    /*
-    * Fechas
-    *
-    * En este documento están dentro del mismo
-    * párrafo:
-    *
-    * Recibido: 3/2025Aceptado: 5/2025
-    */
-    const fullText =
-      texts.join(" ");
-
-    const received =
-      fullText.match(
-        /Recibido\s*:\s*([0-9]{1,2}\/[0-9]{4})/i
-      );
-
-    if (received) {
-      header.dates.received =
-        received[1];
-    }
-
-    const accepted =
-      fullText.match(
-        /Aceptado\s*:\s*([0-9]{1,2}\/[0-9]{4})/i
-      );
-
-    if (accepted) {
-      header.dates.accepted =
-        accepted[1];
-    }
-
-    const published =
-      fullText.match(
-        /Publicado\s*:\s*([^]+?)(?=\s+(?:Palabras|Resumen|Abstract)|$)/i
-      );
-
-    if (published) {
-      header.dates.published =
-        published[1].trim();
-    }
-
-    return header;
-  }
-
-  private isMetadataText(
-    text: string
-  ): boolean {
-    return (
-      /^https?:\/\//i.test(text) ||
-      /@/.test(text) ||
-      /^doi\s*:/i.test(text) ||
-      /^sección\s*:/i.test(text) ||
-      /^recibido\s*:/i.test(text) ||
-      /^aceptado\s*:/i.test(text) ||
-      /^publicado\s*:/i.test(text) ||
-      /^palabras\s+clave/i.test(text) ||
-      /^c[oó]digos\s+jel/i.test(text)
-    );
   }
 
   private getHeadingLevel(
@@ -676,18 +666,13 @@ export class DocxParser {
       this.xmlParser.parse(xml);
 
     const noteElements =
-      findElements(parsed, `w:${type}`);
+      collectXmlNodes(parsed, `w:${type}`);
 
     const notes: Note[] = [];
 
     for (const note of noteElements) {
-      const rawId =
-        note["@_w:id"] ??
-        note["@_w:id"];
-
-      if (rawId === undefined) continue;
-
-      const id = Number(rawId);
+      const id = readWId(note);
+      if (id === null) continue;
 
       if (id < 1) continue;
 
@@ -712,38 +697,6 @@ export class DocxParser {
     body: BodyBlock[],
     notes: Note[]
   ): void {}
-
-  private findFirstTitleCandidate(
-    paragraphs: RawParagraph[],
-    endIndex: number
-  ): string | undefined {
-    for (
-      let i = 0;
-      i < endIndex;
-      i++
-    ) {
-      const text =
-        paragraphs[i].text.trim();
-
-      if (!text) {
-        continue;
-      }
-
-      if (
-        /^DOI\s*:/i.test(text) ||
-        /^Sección\s*:/i.test(text) ||
-        /^Palabras\s+clave/i.test(text) ||
-        /^https?:\/\//i.test(text) ||
-        /@/.test(text)
-      ) {
-        continue;
-      }
-
-      return text;
-    }
-
-    return undefined;
-  }
 
   private extractAbstractParagraphs(
     paragraphs: RawParagraph[],
@@ -786,39 +739,12 @@ export class DocxParser {
     return result;
   }
 
-  private parseListField(
-    text: string,
-    prefix: RegExp
-  ): string[] {
-    const value =
-      text.replace(prefix, "").trim();
-
-    if (!value) return [];
-
-    return value
-      .split(";")
-      .map((item) => item.trim())
-      .filter(Boolean);
-  }
-
-  private extractField(
-    texts: string[],
-    prefix: RegExp
-  ): string | undefined {
-    const value =
-      texts.find((text) =>
-        prefix.test(text)
-      );
-
-    if (!value) return undefined;
-
-    return value
-      .replace(prefix, "")
-      .trim();
-  }
-
   private extractMainBody(
-    paragraphs: RawParagraph[]
+    paragraphs: RawParagraph[],
+    consumedBlockIndexes: Set<number>,
+    consumedNoteBlockIndexes: Set<number>,
+    referenceHeadingBlockIndex: number | null,
+    extractedBlocks: Map<number, BodyBlock[]>
   ): BodyBlock[] {
     const texts = paragraphs.map(
       (paragraph) => paragraph.text.trim()
@@ -827,23 +753,77 @@ export class DocxParser {
     const startIndex =
       this.findMainBodyStart(texts);
 
-    const endIndex =
+    const existingReferencesStart =
       this.findReferencesStart(
         texts,
         startIndex
       );
+    const detectedReferencesIndex =
+      referenceHeadingBlockIndex === null
+        ? -1
+        : paragraphs.findIndex(
+            (paragraph) =>
+              paragraph.blockIndex === referenceHeadingBlockIndex
+          );
+    const endIndex =
+      existingReferencesStart < 0
+        ? detectedReferencesIndex
+        : detectedReferencesIndex < 0
+          ? existingReferencesStart
+          : Math.min(existingReferencesStart, detectedReferencesIndex);
 
+    const startBlockIndex =
+      startIndex === -1 ? 0 : paragraphs[startIndex].blockIndex;
+    const endBlockIndex =
+      endIndex === -1
+        ? Number.POSITIVE_INFINITY
+        : paragraphs[endIndex].blockIndex;
     const mainParagraphs =
       paragraphs.slice(
         startIndex === -1 ? 0 : startIndex,
         endIndex === -1
           ? paragraphs.length
           : endIndex
+      ).filter(
+        (paragraph) =>
+          !consumedBlockIndexes.has(paragraph.blockIndex) &&
+          !consumedNoteBlockIndexes.has(paragraph.blockIndex)
       );
 
-    return this.buildBodyBlocks(
-      mainParagraphs
-    );
+    const paragraphBlocks = new Map<number, BodyBlock[]>();
+    for (const paragraph of mainParagraphs) {
+      if (
+        consumedBlockIndexes.has(paragraph.blockIndex) ||
+        consumedNoteBlockIndexes.has(paragraph.blockIndex)
+      ) {
+        continue;
+      }
+
+      const blocks = this.buildBodyBlocks([paragraph]);
+      if (blocks.length > 0) {
+        paragraphBlocks.set(paragraph.blockIndex, blocks);
+      }
+    }
+
+    const bodyIndexes = new Set([
+      ...paragraphBlocks.keys(),
+      ...extractedBlocks.keys(),
+    ]);
+    const orderedIndexes = [...bodyIndexes]
+      .filter(
+        (blockIndex) =>
+          blockIndex >= startBlockIndex &&
+          blockIndex < endBlockIndex
+      )
+      .sort((left, right) => left - right);
+    const bodyBlocks: BodyBlock[] = [];
+
+    for (const blockIndex of orderedIndexes) {
+      bodyBlocks.push(...(paragraphBlocks.get(blockIndex) ?? []));
+      bodyBlocks.push(...(extractedBlocks.get(blockIndex) ?? []));
+    }
+
+    return bodyBlocks;
   }
 
   private findMainBodyStart(
@@ -898,62 +878,6 @@ export class DocxParser {
     }
 
     return -1;
-  }
-
-  private extractReferences(
-    paragraphs: RawParagraph[]
-  ): Reference[] {
-    const texts = paragraphs.map(
-      (paragraph) => paragraph.text.trim()
-    );
-
-    const startIndex =
-      this.findReferencesStart(
-        texts,
-        0
-      );
-
-    if (startIndex === -1) {
-      return [];
-    }
-
-    const referenceParagraphs =
-      paragraphs.slice(startIndex + 1);
-
-    const references: Reference[] = [];
-
-    for (const paragraph of referenceParagraphs) {
-      const text =
-        paragraph.text.trim();
-
-      if (!text) {
-        continue;
-      }
-
-      const last =
-        references[references.length - 1];
-
-      if (
-        this.isUrl(text) &&
-        last
-      ) {
-        last.text += ` ${text}`;
-        continue;
-      }
-
-      references.push({
-        id: String(references.length + 1),
-        text,
-      });
-    }
-
-    return references;
-  }
-
-  private isUrl(
-    text: string
-  ): boolean {
-    return /^https?:\/\//i.test(text);
   }
 
 }

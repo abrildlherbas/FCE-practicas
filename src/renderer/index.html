@@ -1,43 +1,160 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="es">
-<head>
-  <meta charset="UTF-8">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Revisa tu artículo, apruébalo y guárdalo como HTML."
+    />
+    <title>Preparar artículo</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="app-header">
+        <a class="brand" href="#" aria-label="Revista científica, inicio">
+          <span class="brand-mark" aria-hidden="true">R</span>
+          <span>Revista científica</span>
+        </a>
+        <p>Preparación de artículos</p>
+      </header>
 
-  <meta
-    name="viewport"
-    content="width=device-width, initial-scale=1.0"
-  >
+      <main class="app-main">
+        <section class="intro" aria-labelledby="page-title">
+          <p class="eyebrow">Un paso a la vez</p>
+          <h1 id="page-title">Prepara tu artículo</h1>
+          <p>
+            Elige un documento Word, revisa cómo quedó y guárdalo cuando
+            estés conforme.
+          </p>
+        </section>
 
-  <title>Article Converter</title>
+        <section class="workflow" aria-label="Pasos para preparar el artículo">
+          <ol class="step-list">
+            <li class="step-item is-current" data-step-indicator="1" aria-current="step">
+              <span class="step-number">1</span>
+              <span>Elegir Word</span>
+            </li>
+            <li class="step-item" data-step-indicator="2">
+              <span class="step-number">2</span>
+              <span>Revisar</span>
+            </li>
+            <li class="step-item" data-step-indicator="3">
+              <span class="step-number">3</span>
+              <span>Aprobar y guardar</span>
+            </li>
+          </ol>
 
-  <link
-    rel="stylesheet"
-    href="./styles.css"
-  >
-</head>
+          <div class="status-row">
+            <span class="status-label">Estado</span>
+            <span
+              id="articleStatus"
+              class="status-badge"
+              data-status="pendiente"
+              role="status"
+              aria-live="polite"
+            >
+              Pendiente
+            </span>
+          </div>
+        </section>
 
-<body>
+        <p id="appMessage" class="app-message" role="status" aria-live="polite" hidden></p>
 
-  <main class="app">
+        <section id="stepChoose" class="step-panel" aria-labelledby="choose-title">
+          <div class="panel-heading">
+            <span class="panel-step">Paso 1</span>
+            <h2 id="choose-title">Elige el documento Word</h2>
+            <p>Selecciona el archivo del artículo que quieres preparar.</p>
+          </div>
+          <button id="selectButton" class="button button-primary" type="button">
+            Elegir documento Word
+          </button>
+        </section>
 
-    <h1>Article Converter</h1>
+        <section
+          id="stepReview"
+          class="step-panel"
+          aria-labelledby="review-title"
+          hidden
+        >
+          <div class="panel-heading review-heading">
+            <div>
+              <span class="panel-step">Paso 2</span>
+              <h2 id="review-title" tabindex="-1">Revisa el artículo</h2>
+              <p id="fileName" class="selected-file"></p>
+            </div>
+            <button id="changeDocumentButton" class="button button-secondary" type="button">
+              Elegir otro Word
+            </button>
+          </div>
 
-    <p class="description">
-      Conversor de documentos Word
-      a una representación JSON estructurada.
-    </p>
+          <div class="review-layout">
+            <section class="preview-panel" aria-labelledby="preview-title">
+              <div class="section-heading">
+                <h3 id="preview-title">Vista del artículo</h3>
+                <p>Así se verá el documento guardado.</p>
+              </div>
+              <iframe
+                id="articlePreview"
+                class="article-preview"
+                title="Vista previa del artículo"
+                sandbox=""
+              ></iframe>
+            </section>
 
-    <button id="selectButton">
-      Seleccionar documento
-    </button>
+            <aside class="warnings-panel" aria-labelledby="warnings-title">
+              <div class="section-heading">
+                <h3 id="warnings-title">Puntos para revisar</h3>
+                <p id="warningSummary"></p>
+              </div>
+              <ul id="warningList" class="warning-list" aria-live="polite"></ul>
+            </aside>
+          </div>
 
-    <div id="fileName"></div>
+          <div class="panel-actions">
+            <p class="action-hint">
+              Si el artículo se ve bien, puedes aprobarlo para guardarlo.
+            </p>
+            <button id="approveButton" class="button button-primary" type="button">
+              Aprobar artículo
+            </button>
+          </div>
+        </section>
 
-    <pre id="output"></pre>
+        <section
+          id="stepApprove"
+          class="step-panel approval-panel"
+          aria-labelledby="approval-title"
+          hidden
+        >
+          <span class="approval-check" aria-hidden="true">✓</span>
+          <span class="panel-step">Paso 3</span>
+          <h2 id="approval-title" tabindex="-1">Artículo aprobado</h2>
+          <p id="approvalSummary">
+            Revisa una vez más el nombre del documento y guárdalo en tu equipo.
+          </p>
+          <p id="approvedFileName" class="selected-file"></p>
+          <div class="approval-actions">
+            <button id="exportButton" class="button button-primary" type="button">
+              Guardar artículo
+            </button>
+            <button id="backToReviewButton" class="button button-secondary" type="button">
+              Volver a revisar
+            </button>
+            <button id="newDocumentButton" class="button button-text" type="button">
+              Elegir otro Word
+            </button>
+          </div>
+        </section>
+      </main>
 
-  </main>
-
-  <script type="module" src="./main.ts"></script>
-
-</body>
+      <footer class="app-footer">
+        Si algo no se ve como esperabas, puedes elegir otro documento y
+        volver a intentarlo.
+      </footer>
+    </div>
+    <script type="module" src="./main.ts"></script>
+  </body>
 </html>

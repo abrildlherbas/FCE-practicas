@@ -1,0 +1,104 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`DocxParser > parsea el DOCX de ejemplo y coincide con el snapshot JSON 1`] = `
+{
+  "body": [
+    {
+      "runs": [
+        {
+          "text": "Introducción",
+          "type": "text",
+        },
+      ],
+      "type": "paragraph",
+    },
+    {
+      "runs": [
+        {
+          "text": "Contenido de la introducción.",
+          "type": "text",
+        },
+      ],
+      "type": "paragraph",
+    },
+    {
+      "runs": [
+        {
+          "text": "x",
+          "type": "text",
+        },
+      ],
+      "type": "paragraph",
+    },
+    {
+      "runs": [
+        {
+          "text": "y",
+          "type": "text",
+        },
+      ],
+      "type": "paragraph",
+    },
+    {
+      "runs": [
+        {
+          "text": "z",
+          "type": "text",
+        },
+      ],
+      "type": "paragraph",
+    },
+    {
+      "headers": [],
+      "rows": [
+        [
+          "Contenido tabular",
+        ],
+      ],
+      "type": "table",
+    },
+  ],
+  "document": {
+    "format": "docx",
+    "normalizedFormat": "docx",
+    "source": "warnings-example.docx",
+  },
+  "header": {
+    "abstract": "Un resumen del artículo de prueba.",
+    "affiliations": [
+      "Instituto de Investigación",
+    ],
+    "authors": [
+      "Ana Pérez",
+    ],
+    "dates": {
+      "accepted": "22/05/2026",
+      "published": "30/06/2026",
+      "received": "14/03/2026",
+    },
+    "jel_codes": [
+      "Q12",
+      "Q18",
+    ],
+    "keywords": [
+      "economía",
+      "producción",
+    ],
+    "title": "Título de ejemplo",
+  },
+  "notes": [],
+  "references": [],
+  "warnings": [
+    {
+      "blockIndex": 7,
+      "code": "short-paragraph-cluster",
+      "message": "Este párrafo breve está entre otros dos párrafos breves; podría ser un fragmento de texto.",
+    },
+    {
+      "blockIndex": 13,
+      "code": "short-paragraph-cluster",
+      "message": "Este párrafo breve está entre otros dos párrafos breves; podría ser un fragmento de texto.",
+    },
+  ],
+}
+`;
