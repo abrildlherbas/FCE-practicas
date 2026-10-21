@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
 import fs from "node:fs/promises";
 import path from "node:path";
 
@@ -10,6 +10,7 @@ declare const MAIN_WINDOW_VITE_NAME: string;
 
 let mainWindow: BrowserWindow | null = null;
 let selectedDocumentPath: string | null = null;
+let savedArticlePath: string | null = null;
 
 function imageMimeType(fileName: string): string {
   const extension = path.extname(fileName).toLowerCase();
@@ -112,6 +113,7 @@ ipcMain.handle("select-document", async () => {
   }
 
   selectedDocumentPath = result.filePaths[0];
+  savedArticlePath = null;
   return selectedDocumentPath;
 });
 
@@ -168,7 +170,17 @@ ipcMain.handle("export-article", async (_event, html: unknown) => {
 
   const htmlWithImages = await inlineArticleImages(html);
   await fs.writeFile(result.filePath, htmlWithImages, "utf8");
+  savedArticlePath = result.filePath;
   return result.filePath;
+});
+
+ipcMain.handle("open-saved-article-folder", async () => {
+  if (!savedArticlePath) {
+    throw new Error("Guarda el artículo antes de abrir su carpeta.");
+  }
+
+  await fs.access(savedArticlePath);
+  shell.showItemInFolder(savedArticlePath);
 });
 
 app.whenReady().then(() => {

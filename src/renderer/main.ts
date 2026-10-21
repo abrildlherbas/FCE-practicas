@@ -18,11 +18,17 @@ const approveButton = getElement<HTMLButtonElement>("#approveButton");
 const backToReviewButton =
   getElement<HTMLButtonElement>("#backToReviewButton");
 const exportButton = getElement<HTMLButtonElement>("#exportButton");
+const openFolderButton =
+  getElement<HTMLButtonElement>("#openFolderButton");
+const downloadArticleLink =
+  getElement<HTMLAnchorElement>("#downloadArticleLink");
 const articleStatus = getElement<HTMLSpanElement>("#articleStatus");
 const appMessage = getElement<HTMLParagraphElement>("#appMessage");
 const fileName = getElement<HTMLParagraphElement>("#fileName");
 const approvedFileName =
   getElement<HTMLParagraphElement>("#approvedFileName");
+const savedLocation = getElement<HTMLElement>("#savedLocation");
+const savedFilePath = getElement<HTMLElement>("#savedFilePath");
 const warningSummary =
   getElement<HTMLParagraphElement>("#warningSummary");
 const warningList = getElement<HTMLUListElement>("#warningList");
@@ -42,7 +48,9 @@ if (stepIndicators.length !== 3) {
 
 let currentArticle: Article | null = null;
 let currentHtml = "";
+let currentExportHtml = "";
 let currentFilePath = "";
+let downloadedHtmlUrl: string | null = null;
 let isApproved = false;
 let isBusy = false;
 
@@ -149,16 +157,28 @@ function setBusy(busy: boolean): void {
   newDocumentButton.disabled = busy;
   approveButton.disabled = busy;
   exportButton.disabled = busy;
+  openFolderButton.disabled = busy;
 }
 
 function resetToStart(): void {
   currentArticle = null;
   currentHtml = "";
+  currentExportHtml = "";
   currentFilePath = "";
   isApproved = false;
   preview.removeAttribute("srcdoc");
   fileName.textContent = "";
   approvedFileName.textContent = "";
+  savedFilePath.textContent = "";
+  savedLocation.hidden = true;
+  openFolderButton.hidden = true;
+  downloadArticleLink.hidden = true;
+  downloadArticleLink.removeAttribute("href");
+  downloadArticleLink.removeAttribute("download");
+  if (downloadedHtmlUrl) {
+    URL.revokeObjectURL(downloadedHtmlUrl);
+    downloadedHtmlUrl = null;
+  }
   clearMessage();
   setStatus("pendiente");
   showStep(1);
@@ -183,6 +203,16 @@ async function chooseAndPrepareDocument(): Promise<void> {
   showMessage("Estamos preparando el artículo. Esto puede tardar un momento.");
   currentFilePath = filePath;
   isApproved = false;
+  savedFilePath.textContent = "";
+  savedLocation.hidden = true;
+  openFolderButton.hidden = true;
+  downloadArticleLink.hidden = true;
+  downloadArticleLink.removeAttribute("href");
+  downloadArticleLink.removeAttribute("download");
+  if (downloadedHtmlUrl) {
+    URL.revokeObjectURL(downloadedHtmlUrl);
+    downloadedHtmlUrl = null;
+  }
 
   try {
     const article = await window.electronAPI.convertDocument(filePath);
@@ -191,6 +221,7 @@ async function chooseAndPrepareDocument(): Promise<void> {
 
     currentArticle = article;
     currentHtml = html;
+    currentExportHtml = previewHtml;
     fileName.textContent = filePath.split(/[\\/]/).pop() ?? "Documento Word";
     approvedFileName.textContent = fileName.textContent;
     preview.srcdoc = previewHtml;
@@ -241,12 +272,37 @@ exportButton.addEventListener("click", async () => {
   try {
     const savedPath = await window.electronAPI.exportArticle(currentHtml);
     if (!savedPath) return;
-    showMessage(
-      `El artículo quedó guardado como ${savedPath.split(/[\\/]/).pop()}.`
+    savedFilePath.textContent = savedPath;
+    savedLocation.hidden = false;
+    openFolderButton.hidden = false;
+    if (downloadedHtmlUrl) URL.revokeObjectURL(downloadedHtmlUrl);
+    downloadedHtmlUrl = URL.createObjectURL(
+      new Blob([currentExportHtml], { type: "text/html;charset=utf-8" })
     );
+    downloadArticleLink.href = downloadedHtmlUrl;
+    downloadArticleLink.download = savedPath.split(/[\\/]/).pop() ?? "articulo.html";
+    downloadArticleLink.hidden = false;
+    showMessage("El artículo quedó guardado en la ubicación indicada.");
   } catch (error) {
     console.error(error);
     showMessage("No pudimos guardar el artículo. Inténtalo otra vez.");
+  } finally {
+    setBusy(false);
+  }
+});
+
+openFolderButton.addEventListener("click", async () => {
+  if (!savedFilePath.textContent || isBusy) return;
+
+  setBusy(true);
+  clearMessage();
+  try {
+    await window.electronAPI.openSavedArticleFolder();
+  } catch (error) {
+    console.error(error);
+    showMessage(
+      "No pudimos abrir la carpeta del artículo. Comprueba que el archivo siga en esa ubicación."
+    );
   } finally {
     setBusy(false);
   }

@@ -55,6 +55,18 @@ describe("flujo de revisión de la aplicación", () => {
     expect(byId(document, "stepApprove").hasAttribute("hidden")).toBe(true);
     expect(preview.getAttribute("sandbox")).toBe("");
     expect(preview.getAttribute("title")).toBe("Vista previa del artículo");
+    expect(byId(document, "savedLocation").hasAttribute("hidden")).toBe(true);
+    expect(byId(document, "savedFilePath").textContent).toBe("");
+    expect(byId(document, "openFolderButton").textContent?.trim()).toBe(
+      "Abrir carpeta"
+    );
+    expect(byId(document, "openFolderButton").hasAttribute("hidden")).toBe(
+      true
+    );
+    const downloadLink = byId(document, "downloadArticleLink");
+    expect(downloadLink.textContent?.trim()).toBe("Descargar artículo");
+    expect(downloadLink.hasAttribute("hidden")).toBe(true);
+    expect(downloadLink.hasAttribute("download")).toBe(false);
     expect(byId(document, "warningList").getAttribute("aria-live")).toBe(
       "polite"
     );
@@ -71,6 +83,7 @@ describe("flujo de revisión de la aplicación", () => {
     expect(visibleText).toContain("Así se verá el documento guardado.");
     expect(visibleText).toContain("Aprobar artículo");
     expect(visibleText).toContain("Guardar artículo");
+    expect(visibleText).toContain("Lo encontrarás en esta ubicación:");
     expect(visibleText).not.toMatch(
       /\b(parser|renderer|JSON|HTML|metadatos|relación OOXML)\b/i
     );

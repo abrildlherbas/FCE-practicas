@@ -136,6 +136,30 @@
             Revisa una vez más el nombre del documento y guárdalo en tu equipo.
           </p>
           <p id="approvedFileName" class="selected-file"></p>
+          <section
+            id="savedLocation"
+            class="saved-location"
+            aria-labelledby="savedLocationTitle"
+            aria-live="polite"
+            hidden
+          >
+            <h3 id="savedLocationTitle">Artículo guardado</h3>
+            <p>Lo encontrarás en esta ubicación:</p>
+            <code id="savedFilePath" class="saved-file-path"></code>
+            <div class="saved-location-actions">
+              <a id="downloadArticleLink" class="button button-primary" hidden>
+                Descargar artículo
+              </a>
+              <button
+                id="openFolderButton"
+                class="button button-secondary"
+                type="button"
+                hidden
+              >
+                Abrir carpeta
+              </button>
+            </div>
+          </section>
           <div class="approval-actions">
             <button id="exportButton" class="button button-primary" type="button">
               Guardar artículo

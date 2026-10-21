@@ -422,6 +422,49 @@ iframe:focus-visible {
   max-width: 620px;
 }
 
+.saved-location {
+  max-width: 720px;
+  margin: 1.25rem auto 0;
+  border: 1px solid #c9dfd0;
+  border-radius: 8px;
+  padding: 1rem;
+  background: var(--success-bg);
+  text-align: left;
+}
+
+.saved-location h3 {
+  margin: 0;
+  color: var(--success);
+  font-size: 1rem;
+}
+
+.saved-location p {
+  margin: 0.35rem 0;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.saved-file-path {
+  display: block;
+  margin-block: 0.5rem 0.85rem;
+  overflow-wrap: anywhere;
+  color: var(--ink);
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  user-select: text;
+}
+
+.saved-location-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}
+
+.saved-location-actions a {
+  text-decoration: none;
+}
+
 .approval-actions {
   display: flex;
   flex-wrap: wrap;
@@ -484,6 +527,10 @@ iframe:focus-visible {
   .review-heading .button,
   .panel-actions .button,
   .approval-actions .button {
+    width: 100%;
+  }
+
+  .saved-location-actions .button {
     width: 100%;
   }
 

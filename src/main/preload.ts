@@ -12,4 +12,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   exportArticle: (html: string) =>
     ipcRenderer.invoke("export-article", html),
+
+  openSavedArticleFolder: () =>
+    ipcRenderer.invoke("open-saved-article-folder"),
 });

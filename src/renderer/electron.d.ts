@@ -12,6 +12,8 @@ declare global {
       preparePreview(html: string): Promise<string>;
 
       exportArticle(html: string): Promise<string | null>;
+
+      openSavedArticleFolder(): Promise<void>;
     };
   }
 }
