@@ -14,7 +14,6 @@ import {
 import {
   findElement,
   findElements,
-  findDirectChildren,
   extractText,
   readWId,
 } from "./docx-xml.utils";
@@ -40,6 +39,11 @@ interface ParsedStructure {
   body: BodyBlock[];
   references: Reference[];
   warnings: ParseWarning[];
+}
+
+interface ExtractedMainBody {
+  blocks: BodyBlock[];
+  sourceBlockIndexes: number[];
 }
 
 type XmlRecord = Record<string, unknown>;
@@ -105,7 +109,11 @@ export class DocxParser {
     parseTagValue: false,
   });
 
-  async parse(zip: JSZip, sourcePath: string): Promise<Article> {
+  async parse(
+    zip: JSZip,
+    sourcePath: string,
+    previousWarnings: ParseWarning[] = []
+  ): Promise<Article> {
     const documentXml = await this.readRequired(
       zip,
       "word/document.xml"
@@ -151,7 +159,8 @@ export class DocxParser {
       document,
       stylesResolver,
       [...footnotes, ...endnotes],
-      extractedBlocks
+      extractedBlocks,
+      previousWarnings
     );
 
     this.attachNoteAnchors(
@@ -180,7 +189,8 @@ export class DocxParser {
     extractedBlocks: {
       blocksByBodyIndex: Map<number, BodyBlock[]>;
       warnings: ParseWarning[];
-    }
+    },
+    previousWarnings: ParseWarning[]
   ): ParsedStructure {
     const body = findElement(
       document,
@@ -221,6 +231,32 @@ export class DocxParser {
     const mainBodyStart = this.findMainBodyStart(
       rawParagraphs.map((paragraph) => paragraph.text.trim())
     );
+    const mainBodyStartBlockIndex =
+      mainBodyStart < 0
+        ? Number.POSITIVE_INFINITY
+        : rawParagraphs[mainBodyStart].blockIndex;
+    headerExtraction.header.sourceParagraphs = rawParagraphs
+      .filter(
+        (paragraph) =>
+          paragraph.blockIndex < mainBodyStartBlockIndex &&
+          paragraph.text.trim().length > 0
+      )
+      .map((paragraph) => paragraph.text);
+    for (const paragraph of rawParagraphs) {
+      if (
+        paragraph.blockIndex < mainBodyStartBlockIndex &&
+        !headerExtraction.consumedBlockIndexes.has(paragraph.blockIndex) &&
+        paragraph.text.trim()
+      ) {
+        warnings.push({
+          code: "unclassified-header-paragraph",
+          message:
+            `Texto previo al cuerpo que no se pudo clasificar: ${paragraph.text}`,
+          blockIndex: paragraph.blockIndex,
+          status: "pendiente",
+        });
+      }
+    }
     const noteDetection = new NoteDetector().detect(
       rawParagraphs.map((paragraph) => ({
         blockIndex: paragraph.blockIndex,
@@ -238,7 +274,7 @@ export class DocxParser {
     const normalizedParagraphs =
       this.normalizeBlocks(rawParagraphs);
 
-    const bodyBlocks =
+    const extractedMainBody =
       this.extractMainBody(
         normalizedParagraphs,
         headerExtraction.consumedBlockIndexes,
@@ -247,17 +283,62 @@ export class DocxParser {
         extractedBlocks.blocksByBodyIndex
       );
     const citationLinking = new CitationLinker().link(
-      bodyBlocks,
+      extractedMainBody.blocks,
       noteDetection.references
     );
-    warnings.push(...citationLinking.warnings);
+    const sourceBodyIndexes = new Map<number, number[]>();
+    extractedMainBody.sourceBlockIndexes.forEach((sourceIndex, bodyIndex) => {
+      const indexes = sourceBodyIndexes.get(sourceIndex) ?? [];
+      indexes.push(bodyIndex);
+      sourceBodyIndexes.set(sourceIndex, indexes);
+    });
+    const bodyWarnings = warnings.map((warning) => {
+      const matchingIndexes = warning.blockIndex === undefined
+        ? undefined
+        : sourceBodyIndexes.get(warning.blockIndex);
+      const bodyIndex = warning.code.startsWith("image-") ||
+        warning.code.includes("image")
+        ? matchingIndexes?.find((index) =>
+            extractedMainBody.blocks[index]?.type === "image"
+          ) ?? matchingIndexes?.[0]
+        : matchingIndexes?.[0];
+      return {
+        ...warning,
+        ...(bodyIndex !== undefined ? { blockId: `b-${bodyIndex}` } : {}),
+        status: "pendiente" as const,
+      };
+    });
+    const citationWarnings = citationLinking.warnings.map((warning) => ({
+      ...warning,
+      ...(warning.blockIndex !== undefined
+        ? { blockId: `b-${warning.blockIndex}` }
+        : {}),
+      status: "pendiente" as const,
+    }));
+    const detectedWarnings = [...bodyWarnings, ...citationWarnings];
+    const resolvedWarningKeys = new Set(
+      previousWarnings
+        .filter((warning) => warning.status === "resuelto")
+        .map((warning) =>
+          this.warningKey(warning)
+        )
+    );
+    const currentWarnings = detectedWarnings.map((warning) =>
+      resolvedWarningKeys.has(this.warningKey(warning))
+        ? { ...warning, status: "resuelto" as const }
+        : warning
+    );
 
     return {
       header: headerExtraction.header,
       body: citationLinking.body,
       references: noteDetection.references,
-      warnings,
+      warnings: currentWarnings,
     };
+  }
+
+  private warningKey(warning: ParseWarning): string {
+    return `${warning.code}\u0000${warning.blockId ?? ""}\u0000${warning.message}`;
   }
 
   private async readRequired(
@@ -290,14 +371,12 @@ export class DocxParser {
     body: any,
     stylesResolver: StylesResolver
   ): RawParagraph[] {
-    const paragraphElements =
-      findDirectChildren(body, "w:p");
-    const directElements = Array.isArray(body)
-      ? body.filter((child) => getXmlName(child) !== null)
-      : [];
+    const bodyElements = this.bodyContentElements(body);
+    const paragraphElements = bodyElements
+      .filter(({ node }) => getXmlName(node) === "w:p");
 
     return paragraphElements.map(
-      (paragraph, paragraphIndex): RawParagraph => {
+      ({ node: paragraph, blockIndex }): RawParagraph => {
         const runs = this.parseRuns(paragraph, stylesResolver);
         const firstRun =
           collectXmlNodes(paragraph, "w:r")[0] ?? null;
@@ -317,9 +396,7 @@ export class DocxParser {
           runs,
           text: this.extractParagraphText(paragraph),
           headingLevel: this.getHeadingLevel(paragraph),
-          blockIndex: Array.isArray(body)
-            ? Math.max(directElements.indexOf(paragraph), 0)
-            : paragraphIndex,
+          blockIndex,
           styleId:
             stylesResolver.getParagraphStyleId(paragraph),
           sizeHalfPoints: firstRunSize,
@@ -341,18 +418,17 @@ export class DocxParser {
     recognizedBlockIndexes: Set<number>
   ): ParseWarning[] {
     const warnings: ParseWarning[] = [];
-    const bodyChildren = Array.isArray(body) ? body : [];
+    const bodyChildren = this.bodyContentElements(body);
 
-    let blockIndex = -1;
-    for (const child of bodyChildren) {
+    for (const { node: child, blockIndex } of bodyChildren) {
       const name = getXmlName(child);
       if (!name) continue;
-      blockIndex++;
 
       if (
         name !== "w:p" &&
         name !== "w:sectPr" &&
-        !recognizedBlockIndexes.has(blockIndex)
+        (name !== "w:tbl" ||
+          !recognizedBlockIndexes.has(blockIndex))
       ) {
         const text = collectXmlNodes(child, "w:r")
           .map((run) => this.extractRunText(run))
@@ -366,7 +442,25 @@ export class DocxParser {
             ? `El elemento ${name} del cuerpo no se convirtió a un bloque del artículo. Texto: ${text}`
             : `El elemento ${name} del cuerpo no se convirtió a un bloque del artículo.`,
           blockIndex,
+          status: "pendiente",
         });
+      }
+
+      if (name === "w:p") {
+        for (const textBox of findElements(child, "w:txbxContent")) {
+          const text = findElements(textBox, "w:t")
+            .map((node) => extractText(node))
+            .join("");
+          if (text) {
+            warnings.push({
+              code: "unclassified-element",
+              message:
+                `El cuadro de texto del párrafo no se convirtió a un bloque del artículo. Texto: ${text}`,
+              blockIndex,
+              status: "pendiente",
+            });
+          }
+        }
       }
     }
 
@@ -391,6 +485,7 @@ export class DocxParser {
           message:
             `Este párrafo breve está entre otros dos párrafos breves; podría ser un fragmento de texto. Texto: ${paragraphs[index].text}`,
           blockIndex: paragraphs[index].blockIndex,
+          status: "pendiente",
         });
       }
     }
@@ -408,6 +503,7 @@ export class DocxParser {
             message:
               `No se pudo resolver el tamaño de fuente de este run. Texto: ${runText}`,
             blockIndex: paragraph.blockIndex,
+            status: "pendiente",
           });
         }
       }
@@ -451,75 +547,10 @@ export class DocxParser {
         continue;
       }
 
-      const separator = this.getRunSeparator(
-        previous.text,
-        run.text,
-        runs[i + 1]
-      );
-
-      previous.text += separator + run.text;
+      previous.text += run.text;
     }
 
     return normalized;
-  }
-
-  private getRunSeparator(
-    previousText: string,
-    currentText: string,
-    nextRun?: InlineRun
-  ): string {
-    const previous = previousText.trimEnd();
-    const current = currentText.trimStart();
-
-    if (!previous || !current) return "";
-
-    if (
-      previousText.endsWith(" ") ||
-      currentText.startsWith(" ")
-    ) {
-      return "";
-    }
-
-    if (/^[.,;:!?%)\]}]/.test(current)) {
-      return "";
-    }
-
-    if (/[([{]$/.test(previous)) {
-      return "";
-    }
-
-    if (
-      /\d$/.test(previous) &&
-      /^\d/.test(current)
-    ) {
-      return "";
-    }
-
-    const previousWord =
-      previous.match(
-        /[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+$/
-      )?.[0] ?? "";
-
-    const currentWord =
-      current.match(
-        /^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+/
-      )?.[0] ?? "";
-
-    if (
-      previousWord.length === 1 ||
-      currentWord.length === 1
-    ) {
-      return "";
-    }
-
-    if (
-      /[A-Za-zÁÉÍÓÚÜÑáéíóúüñ)]$/.test(previous) &&
-      /^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]/.test(current)
-    ) {
-      return " ";
-    }
-
-    return "";
   }
 
   private buildBodyBlocks(
@@ -691,6 +722,28 @@ export class DocxParser {
     return level;
   }
 
+  private bodyContentElements(
+    body: unknown
+  ): { node: unknown; blockIndex: number }[] {
+    const elements: { node: unknown; blockIndex: number }[] = [];
+    const visit = (children: unknown): void => {
+      if (!Array.isArray(children)) return;
+      for (const child of children) {
+        const name = getXmlName(child);
+        if (name === "w:sdt") {
+          const content = findElement(child, "w:sdtContent");
+          if (content) visit(content);
+          continue;
+        }
+        if (name) {
+          elements.push({ node: child, blockIndex: elements.length });
+        }
+      }
+    };
+    visit(body);
+    return elements;
+  }
+
   private parseNotes(
     xml: string,
     type: "footnote" | "endnote"
@@ -778,7 +831,7 @@ export class DocxParser {
     consumedNoteBlockIndexes: Set<number>,
     referenceHeadingBlockIndex: number | null,
     extractedBlocks: Map<number, BodyBlock[]>
-  ): BodyBlock[] {
+  ): ExtractedMainBody {
     const texts = paragraphs.map(
       (paragraph) => paragraph.text.trim()
     );
@@ -850,13 +903,18 @@ export class DocxParser {
       )
       .sort((left, right) => left - right);
     const bodyBlocks: BodyBlock[] = [];
+    const sourceBlockIndexes: number[] = [];
 
     for (const blockIndex of orderedIndexes) {
-      bodyBlocks.push(...(paragraphBlocks.get(blockIndex) ?? []));
-      bodyBlocks.push(...(extractedBlocks.get(blockIndex) ?? []));
+      const blocks = [
+        ...(paragraphBlocks.get(blockIndex) ?? []),
+        ...(extractedBlocks.get(blockIndex) ?? []),
+      ];
+      bodyBlocks.push(...blocks);
+      sourceBlockIndexes.push(...blocks.map(() => blockIndex));
     }
 
-    return bodyBlocks;
+    return { blocks: bodyBlocks, sourceBlockIndexes };
   }
 
   private findMainBodyStart(

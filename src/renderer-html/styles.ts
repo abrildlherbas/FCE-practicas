@@ -7,8 +7,8 @@ export const articleStyles = `
   --article-accent: #245b4b;
   --article-rule: #d8ded8;
   --article-surface: #f3f5f1;
-  --article-font-body: Georgia, "Times New Roman", serif;
-  --article-font-ui: "Segoe UI", Arial, sans-serif;
+  --article-font-body: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --article-font-ui: system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
 * {
@@ -20,39 +20,45 @@ body {
   background: var(--article-paper);
   color: var(--article-ink);
   font-family: var(--article-font-body);
-  font-size: 1.0625rem;
-  line-height: 1.75;
+  line-height: 1.6;
 }
 
 a {
-  color: var(--article-accent);
+  color: var(--revista-color, var(--article-accent));
   text-underline-offset: 0.18em;
 }
 
 a:focus-visible {
-  outline: 3px solid var(--article-accent);
+  outline: 3px solid currentColor;
   outline-offset: 3px;
 }
 
-.journal-header,
-.journal-footer {
+.header,
+.footer {
   font-family: var(--article-font-ui);
+  background-color: var(--revista-color);
+  color: #fff;
 }
 
-.journal-header {
+.header a,
+.footer a {
+  color: #fff;
+}
+
+.header {
   border-bottom: 1px solid var(--article-rule);
 }
 
 .journal-masthead,
-.journal-footer-inner,
+.footer-inner,
 .article-content {
-  width: min(100% - 3rem, 48rem);
+  width: min(70ch, calc(100% - 2rem));
   margin-inline: auto;
 }
 
 .journal-masthead {
   padding-block: 1.25rem;
-  color: var(--article-accent);
+  color: #fff;
   font-size: 0.8125rem;
   font-weight: 700;
   letter-spacing: 0.12em;
@@ -61,6 +67,10 @@ a:focus-visible {
 
 .article-content {
   padding-block: clamp(2.5rem, 7vw, 5.5rem);
+}
+
+main {
+  background-color: var(--article-paper);
 }
 
 .article-heading {
@@ -115,7 +125,7 @@ a:focus-visible {
 .article-abstract {
   margin-block: 2rem 3rem;
   padding: 1.25rem 1.5rem;
-  border-left: 3px solid var(--article-accent);
+  border-left: 3px solid var(--revista-color, var(--article-accent));
   background: var(--article-surface);
 }
 
@@ -156,6 +166,11 @@ a:focus-visible {
   font-size: 1.6rem;
 }
 
+.article-header .article-heading {
+  margin-top: 0;
+  font-size: clamp(2rem, 5vw, 3.4rem);
+}
+
 .article-content h3 {
   margin-top: 2rem;
   font-size: 1.3rem;
@@ -174,6 +189,7 @@ a:focus-visible {
 }
 
 .note-reference {
+  color: var(--revista-color, var(--article-accent));
   font-family: var(--article-font-ui);
   font-size: 0.75em;
   line-height: 0;
@@ -243,29 +259,42 @@ a:focus-visible {
   padding-left: 0.25rem;
 }
 
+.reference-backlink {
+  display: inline-block;
+  margin-inline-start: 0.45rem;
+  font-family: var(--article-font-ui);
+}
+
+.reference-backlink::before {
+  content: "↩";
+}
+
 .note-backlinks {
   margin-left: 0.5rem;
   font-family: var(--article-font-ui);
   font-size: 0.85rem;
 }
 
-.journal-footer {
+.footer {
   margin-top: 4rem;
   border-top: 1px solid var(--article-rule);
-  background: var(--article-surface);
 }
 
-.journal-footer-inner {
+.footer-inner {
   display: flex;
   flex-wrap: wrap;
   justify-content: space-between;
   gap: 1rem;
   padding-block: 1.5rem;
-  color: var(--article-muted);
+  color: #fff;
   font-size: 0.8125rem;
 }
 
-.journal-footer nav ul {
+.footer-inner > * {
+  color: #fff;
+}
+
+.footer nav ul {
   display: flex;
   flex-wrap: wrap;
   gap: 1rem;
@@ -275,14 +304,22 @@ a:focus-visible {
 }
 
 @media (max-width: 36rem) {
-  .journal-masthead,
-  .journal-footer-inner,
-  .article-content {
-    width: min(100% - 2rem, 48rem);
-  }
-
   .article-abstract {
     padding: 1rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }
 `;

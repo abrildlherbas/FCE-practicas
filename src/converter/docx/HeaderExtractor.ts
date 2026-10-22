@@ -395,6 +395,7 @@ export class HeaderExtractor {
         warnings.push({
           code: `header-missing-${field}`,
           message,
+          status: "pendiente",
         });
       }
     }

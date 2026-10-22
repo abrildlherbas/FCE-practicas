@@ -4,6 +4,7 @@ import path from "node:path";
 
 import { DocxReader } from "../converter/docx/reader";
 import { DocxParser } from "../converter/docx/parser";
+import type { ParseWarning } from "../converter/models/Article";
 
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string | undefined;
 declare const MAIN_WINDOW_VITE_NAME: string;
@@ -119,7 +120,7 @@ ipcMain.handle("select-document", async () => {
 
 ipcMain.handle(
   "convert-document",
-  async (_event, filePath: string) => {
+  async (_event, filePath: string, previousWarnings: unknown) => {
     const extension = path.extname(filePath).toLowerCase();
 
     if (extension !== ".docx") {
@@ -133,7 +134,20 @@ ipcMain.handle(
 
     const zip = await reader.open(filePath);
 
-    return parser.parse(zip, filePath);
+    const warnings = Array.isArray(previousWarnings)
+      ? previousWarnings.filter(
+          (warning): warning is ParseWarning =>
+            typeof warning === "object" &&
+            warning !== null &&
+            "status" in warning &&
+            warning.status === "resuelto" &&
+            "code" in warning &&
+            typeof warning.code === "string" &&
+            "message" in warning &&
+            typeof warning.message === "string"
+        )
+      : [];
+    return parser.parse(zip, filePath, warnings);
   }
 );
 

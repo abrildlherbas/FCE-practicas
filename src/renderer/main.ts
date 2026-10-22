@@ -1,10 +1,10 @@
 import type { Article } from "../converter/models/Article";
 import { renderArticle } from "../renderer-html/renderArticle";
-import { validateBrandColor } from "../renderer-html/contrast";
 import {
-  validateBrandLogo,
-  type ValidatedBrandLogo,
-} from "../renderer-html/brand-logo";
+  focusWarningBlock,
+  pendingWarnings,
+  resolveWarning,
+} from "./warning-review";
 
 function getElement<T extends HTMLElement>(selector: string): T {
   const element = document.querySelector<T>(selector);
@@ -17,8 +17,6 @@ function getElement<T extends HTMLElement>(selector: string): T {
 const selectButton = getElement<HTMLButtonElement>("#selectButton");
 const brandColorInput = getElement<HTMLInputElement>("#brandColor");
 const brandColorStatus = getElement<HTMLElement>("#brandColorStatus");
-const brandLogoInput = getElement<HTMLInputElement>("#brandLogo");
-const brandLogoStatus = getElement<HTMLElement>("#brandLogoStatus");
 const changeDocumentButton =
   getElement<HTMLButtonElement>("#changeDocumentButton");
 const newDocumentButton =
@@ -42,6 +40,16 @@ const warningSummary =
   getElement<HTMLParagraphElement>("#warningSummary");
 const warningList = getElement<HTMLUListElement>("#warningList");
 const preview = getElement<HTMLIFrameElement>("#articlePreview");
+const pendingWarningCount =
+  getElement<HTMLSpanElement>("#pendingWarningCount");
+const expandPreviewButton =
+  getElement<HTMLButtonElement>("#expandPreviewButton");
+const editHtmlButton = getElement<HTMLButtonElement>("#editHtmlButton");
+const saveHtmlEditButton =
+  getElement<HTMLButtonElement>("#saveHtmlEditButton");
+const cancelHtmlEditButton =
+  getElement<HTMLButtonElement>("#cancelHtmlEditButton");
+const editWarning = getElement<HTMLParagraphElement>("#editWarning");
 const panels = [
   getElement<HTMLElement>("#stepChoose"),
   getElement<HTMLElement>("#stepReview"),
@@ -62,12 +70,17 @@ let currentFilePath = "";
 let downloadedHtmlUrl: string | null = null;
 let isApproved = false;
 let isBusy = false;
+let hasManualEdits = false;
+let isPreviewEditing = false;
 let selectedBrandColor: string | null = null;
-let selectedBrandLogo: ValidatedBrandLogo | null = null;
+const resolvedWarningsByFile = new Map<
+  string,
+  Article["warnings"]
+>();
 
-const initialBrandColor = validateBrandColor(brandColorInput.value);
-if (initialBrandColor.valid) {
-  selectedBrandColor = initialBrandColor.color;
+const HEX_COLOR_PATTERN = /^#[0-9a-f]{6}$/i;
+if (HEX_COLOR_PATTERN.test(brandColorInput.value)) {
+  selectedBrandColor = brandColorInput.value.toUpperCase();
 }
 
 function showMessage(message: string): void {
@@ -110,7 +123,7 @@ function setStatus(status: "pendiente" | "con-advertencias" | "aprobado"): void 
 function friendlyWarning(code: string, message: string): string {
   const simpleMessages: Record<string, string> = {
     "unclassified-element":
-      "Hay contenido que no pudimos incluir. Revisa si falta una parte del artículo.",
+      "Encontramos contenido que no pudimos ubicar. Revisa si falta una parte del artículo.",
     "short-paragraph-cluster":
       "Encontramos varios fragmentos muy breves seguidos. Comprueba que el texto se lea completo.",
     "unresolved-run-size":
@@ -125,6 +138,12 @@ function friendlyWarning(code: string, message: string): string {
       "Hay un elemento visual que no pudimos mostrar. Comprueba que no falte contenido.",
     "uncertain-reference":
       "Hay una referencia que conviene revisar antes de guardar.",
+    "unmatched-citation":
+      "Hay una cita en el texto que no coincide con ninguna referencia.",
+    "ambiguous-citation":
+      "Una cita puede corresponder a más de una referencia. Revisa cuál es la correcta.",
+    "uncited-reference":
+      "Hay una referencia que no encontramos citada en el texto.",
     "unclassified-reference":
       "Hay una referencia que no pudimos ordenar. Revísala antes de guardar.",
     "ambiguous-note-size":
@@ -143,24 +162,72 @@ function friendlyWarning(code: string, message: string): string {
 
 function renderWarnings(article: Article): void {
   warningList.replaceChildren();
-  if (article.warnings.length === 0) {
-    warningSummary.textContent = "No encontramos puntos que requieran atención.";
+  const warnings = pendingWarnings(article.warnings);
+  pendingWarningCount.textContent = String(warnings.length);
+  pendingWarningCount.setAttribute(
+    "aria-label",
+    `${warnings.length} errores pendientes`
+  );
+  if (warnings.length === 0) {
+    warningSummary.textContent = "No hay errores pendientes.";
     const item = document.createElement("li");
     item.className = "no-warnings";
-    item.textContent = "El artículo está listo para que lo revises.";
+    item.textContent = "Todos los puntos están resueltos.";
     warningList.append(item);
     setStatus("pendiente");
     return;
   }
 
   warningSummary.textContent =
-    article.warnings.length === 1
-      ? "Encontramos un punto para revisar."
-      : `Encontramos ${article.warnings.length} puntos para revisar.`;
-  for (const warning of article.warnings) {
+    warnings.length === 1
+      ? "Hay 1 error pendiente."
+      : `Hay ${warnings.length} errores pendientes.`;
+  for (const warning of warnings) {
     const item = document.createElement("li");
     item.className = "warning-item";
-    item.textContent = friendlyWarning(warning.code, warning.message);
+    const description = friendlyWarning(warning.code, warning.message);
+
+    const actions = document.createElement("div");
+    actions.className = "warning-actions";
+    if (warning.blockId) {
+      const targetButton = document.createElement("button");
+      targetButton.type = "button";
+      targetButton.className = "warning-target";
+      targetButton.textContent = description;
+      targetButton.addEventListener("click", () => {
+        const block = preview.contentDocument
+          ? focusWarningBlock(preview.contentDocument, warning.blockId)
+          : null;
+        if (block) {
+          preview.focus();
+        } else {
+          showMessage("No encontramos ese bloque en la vista previa.");
+        }
+      });
+      item.append(targetButton);
+    } else {
+      const details = document.createElement("p");
+      details.className = "warning-details";
+      details.textContent = description;
+      item.append(details);
+    }
+
+    const resolveButton = document.createElement("button");
+    resolveButton.type = "button";
+    resolveButton.className = "warning-resolve";
+    resolveButton.textContent = "Marcar como resuelto";
+    resolveButton.addEventListener("click", () => {
+      resolveWarning(article, warning);
+      const resolved = resolvedWarningsByFile.get(currentFilePath) ?? [];
+      resolvedWarningsByFile.set(
+        currentFilePath,
+        [...resolved.filter((item) => item.status === "resuelto"), warning]
+      );
+      isApproved = false;
+      renderWarnings(article);
+    });
+    actions.append(resolveButton);
+    item.append(actions);
     warningList.append(item);
   }
   setStatus("con-advertencias");
@@ -170,12 +237,15 @@ function setBusy(busy: boolean): void {
   isBusy = busy;
   selectButton.disabled = busy;
   brandColorInput.disabled = busy;
-  brandLogoInput.disabled = busy;
   changeDocumentButton.disabled = busy;
   newDocumentButton.disabled = busy;
   approveButton.disabled = busy;
   exportButton.disabled = busy;
   openFolderButton.disabled = busy;
+  expandPreviewButton.disabled = busy;
+  editHtmlButton.disabled = busy;
+  saveHtmlEditButton.disabled = busy;
+  cancelHtmlEditButton.disabled = busy;
 }
 
 function resetToStart(): void {
@@ -183,6 +253,10 @@ function resetToStart(): void {
   currentHtml = "";
   currentExportHtml = "";
   currentFilePath = "";
+  hasManualEdits = false;
+  isPreviewEditing = false;
+  editWarning.hidden = true;
+  preview.classList.remove("is-expanded", "is-editing");
   isApproved = false;
   preview.removeAttribute("srcdoc");
   fileName.textContent = "";
@@ -205,11 +279,17 @@ function resetToStart(): void {
 
 async function chooseAndPrepareDocument(): Promise<void> {
   if (isBusy) return;
+  if (
+    hasManualEdits &&
+    !window.confirm(
+      "Si vuelves a generar el artículo, podrías perder la edición manual. ¿Quieres continuar?"
+    )
+  ) {
+    return;
+  }
   clearMessage();
   if (!selectedBrandColor) {
-    showMessage(
-      "El color elegido es demasiado claro. Elegí un tono más oscuro para que el texto se pueda leer."
-    );
+    showMessage("Elegí un color hexadecimal válido en formato #RRGGBB.");
     brandColorInput.focus();
     return;
   }
@@ -227,6 +307,8 @@ async function chooseAndPrepareDocument(): Promise<void> {
   setBusy(true);
   showMessage("Estamos preparando el artículo. Esto puede tardar un momento.");
   currentFilePath = filePath;
+  hasManualEdits = false;
+  editWarning.hidden = true;
   isApproved = false;
   savedFilePath.textContent = "";
   savedLocation.hidden = true;
@@ -240,11 +322,13 @@ async function chooseAndPrepareDocument(): Promise<void> {
   }
 
   try {
-    const article = await window.electronAPI.convertDocument(filePath);
+    const previousWarnings = resolvedWarningsByFile.get(filePath) ?? [];
+    const article = await window.electronAPI.convertDocument(
+      filePath,
+      previousWarnings
+    );
     const html = renderArticle(article, {
       color: selectedBrandColor,
-      logo: selectedBrandLogo ?? undefined,
-      magazineName: "Revista científica",
     });
     const previewHtml = await window.electronAPI.preparePreview(html);
 
@@ -254,6 +338,7 @@ async function chooseAndPrepareDocument(): Promise<void> {
     fileName.textContent = filePath.split(/[\\/]/).pop() ?? "Documento Word";
     approvedFileName.textContent = fileName.textContent;
     preview.srcdoc = previewHtml;
+    preview.setAttribute("sandbox", "allow-same-origin");
     renderWarnings(article);
     clearMessage();
     showStep(2);
@@ -273,57 +358,97 @@ selectButton.addEventListener("click", chooseAndPrepareDocument);
 changeDocumentButton.addEventListener("click", chooseAndPrepareDocument);
 newDocumentButton.addEventListener("click", resetToStart);
 
+expandPreviewButton.addEventListener("click", () => {
+  const expanded = preview.classList.toggle("is-expanded");
+  expandPreviewButton.textContent = expanded
+    ? "Cerrar vista ampliada"
+    : "Ampliar vista";
+});
+
+editHtmlButton.addEventListener("click", () => {
+  const previewDocument = preview.contentDocument;
+  if (!previewDocument) {
+    showMessage("No pudimos abrir la vista previa para editarla.");
+    return;
+  }
+
+  isPreviewEditing = true;
+  previewDocument.designMode = "on";
+  preview.classList.add("is-editing", "is-expanded");
+  editHtmlButton.hidden = true;
+  expandPreviewButton.hidden = true;
+  saveHtmlEditButton.hidden = false;
+  cancelHtmlEditButton.hidden = false;
+  editWarning.hidden = false;
+  showMessage(
+    "Puedes editar el artículo directamente en la vista ampliada. Los estilos se mantienen."
+  );
+});
+
+saveHtmlEditButton.addEventListener("click", async () => {
+  const previewDocument = preview.contentDocument;
+  if (!previewDocument) {
+    showMessage("No pudimos guardar la edición del artículo.");
+    return;
+  }
+  previewDocument.designMode = "off";
+  previewDocument
+    .querySelectorAll(".warning-highlight")
+    .forEach((element) => element.classList.remove("warning-highlight"));
+  previewDocument.getElementById("warning-highlight-style")?.remove();
+  const doctype = previewDocument.doctype ? "<!doctype html>\n" : "";
+  currentHtml = `${doctype}${previewDocument.documentElement.outerHTML}`;
+  currentExportHtml = currentHtml;
+  try {
+    currentExportHtml = await window.electronAPI.preparePreview(currentHtml);
+    preview.srcdoc = currentExportHtml;
+  } catch (error) {
+    console.error(error);
+    showMessage("No pudimos actualizar la vista con la edición guardada.");
+    return;
+  }
+  isPreviewEditing = false;
+  hasManualEdits = true;
+  isApproved = false;
+  preview.classList.remove("is-editing", "is-expanded");
+  editHtmlButton.hidden = false;
+  expandPreviewButton.hidden = false;
+  saveHtmlEditButton.hidden = true;
+  cancelHtmlEditButton.hidden = true;
+  setStatus(
+    currentArticle && pendingWarnings(currentArticle.warnings).length
+      ? "con-advertencias"
+      : "pendiente"
+  );
+  showMessage("La edición quedó guardada y se usará al exportar el artículo.");
+});
+
+cancelHtmlEditButton.addEventListener("click", () => {
+  if (!isPreviewEditing) return;
+  preview.srcdoc = currentExportHtml;
+  isPreviewEditing = false;
+  preview.classList.remove("is-editing", "is-expanded");
+  editHtmlButton.hidden = false;
+  expandPreviewButton.hidden = false;
+  saveHtmlEditButton.hidden = true;
+  cancelHtmlEditButton.hidden = true;
+  editWarning.hidden = !hasManualEdits;
+  clearMessage();
+});
+
 brandColorInput.addEventListener("input", () => {
-  const validation = validateBrandColor(brandColorInput.value);
-  brandColorStatus.classList.toggle("is-error", !validation.valid);
-  if (validation.valid) {
-    selectedBrandColor = validation.color;
-    brandColorStatus.textContent =
-      `Color listo. Contraste con texto blanco: ${validation.contrastRatio.toFixed(2)}:1.`;
+  const color = brandColorInput.value;
+  const isValid = HEX_COLOR_PATTERN.test(color);
+  brandColorStatus.classList.toggle("is-error", !isValid);
+  if (isValid) {
+    selectedBrandColor = color.toUpperCase();
+    brandColorStatus.textContent = "Color listo.";
     return;
   }
 
   selectedBrandColor = null;
-  brandColorStatus.textContent = validation.suggestedColor
-    ? `${validation.error} Probá ${validation.suggestedColor}.`
-    : validation.error;
-});
-
-brandLogoInput.addEventListener("change", async () => {
-  const file = brandLogoInput.files?.[0];
-  if (!file) {
-    selectedBrandLogo = null;
-    brandLogoStatus.classList.remove("is-error");
-    brandLogoStatus.textContent =
-      "Formatos PNG, SVG o JPG; máximo 500 KB.";
-    return;
-  }
-
-  try {
-    const validation = validateBrandLogo(
-      file.name,
-      new Uint8Array(await file.arrayBuffer())
-    );
-    if (!validation.valid) {
-      selectedBrandLogo = null;
-      brandLogoInput.value = "";
-      brandLogoStatus.classList.add("is-error");
-      brandLogoStatus.textContent = validation.error;
-      return;
-    }
-
-    selectedBrandLogo = validation.logo;
-    brandLogoStatus.classList.remove("is-error");
-    brandLogoStatus.textContent =
-      `Logo listo: ${file.name} (${Math.ceil(file.size / 1024)} KB).`;
-  } catch (error) {
-    console.error(error);
-    selectedBrandLogo = null;
-    brandLogoInput.value = "";
-    brandLogoStatus.classList.add("is-error");
-    brandLogoStatus.textContent =
-      "No pudimos leer el logo. Elegí otro archivo e inténtalo de nuevo.";
-  }
+  brandColorStatus.textContent =
+    "Escribí un color hexadecimal válido en formato #RRGGBB.";
 });
 
 approveButton.addEventListener("click", () => {
@@ -339,7 +464,9 @@ backToReviewButton.addEventListener("click", () => {
   if (!currentArticle) return;
   isApproved = false;
   setStatus(
-    currentArticle.warnings.length ? "con-advertencias" : "pendiente"
+    pendingWarnings(currentArticle.warnings).length
+      ? "con-advertencias"
+      : "pendiente"
   );
   clearMessage();
   showStep(2);

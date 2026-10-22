@@ -53,7 +53,7 @@ describe("flujo de revisión de la aplicación", () => {
     expect(byId(document, "stepChoose").hasAttribute("hidden")).toBe(false);
     expect(byId(document, "stepReview").hasAttribute("hidden")).toBe(true);
     expect(byId(document, "stepApprove").hasAttribute("hidden")).toBe(true);
-    expect(preview.getAttribute("sandbox")).toBe("");
+    expect(preview.getAttribute("sandbox")).toBe("allow-same-origin");
     expect(preview.getAttribute("title")).toBe("Vista previa del artículo");
     expect(byId(document, "savedLocation").hasAttribute("hidden")).toBe(true);
     expect(byId(document, "savedFilePath").textContent).toBe("");
@@ -79,7 +79,12 @@ describe("flujo de revisión de la aplicación", () => {
     const html = await fs.readFile(pagePath, "utf8");
     const visibleText = parsePage(html).documentElement.textContent ?? "";
 
-    expect(visibleText).toContain("Puntos para revisar");
+    expect(visibleText).toContain("Errores");
+    expect(visibleText).toContain("Editar");
+    expect(byId(parsePage(html), "warningsTab").getAttribute("role")).toBe(
+      "tab"
+    );
+    expect(byId(parsePage(html), "pendingWarningCount").textContent).toBe("0");
     expect(visibleText).toContain("Así se verá el documento guardado.");
     expect(visibleText).toContain("Aprobar artículo");
     expect(visibleText).toContain("Guardar artículo");

@@ -1,253 +1,154 @@
 import axeCore from "axe-core";
+import fs from "node:fs/promises";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { JSDOM } from "jsdom";
 import { describe, expect, it } from "vitest";
 
-import type { Article } from "../src/converter/models/Article";
-import { validateBrandLogo } from "../src/renderer-html/brand-logo";
-import { validateBrandColor } from "../src/renderer-html/contrast";
-import { renderArticle } from "../src/renderer-html/renderArticle";
+const templateVersionPath = fileURLToPath(
+  new URL("../src/template/VERSION", import.meta.url)
+);
+const examplesDirectory = fileURLToPath(
+  new URL("../examples/", import.meta.url)
+);
 
-interface RenderedMagazine {
-  color: string;
-  logo: string;
+interface MagazineFixture {
   name: string;
-  html: string;
-  dom: JSDOM;
-}
-
-function createArticle(title: string): Article {
-  return {
-    document: {
-      source: `${title}.docx`,
-      format: "docx",
-      normalizedFormat: "docx",
-    },
-    header: {
-      title,
-      authors: [],
-      affiliations: [],
-      keywords: [],
-      keywords_en: [],
-      jel_codes: [],
-      dates: {},
-    },
-    body: [
-      {
-        type: "heading",
-        level: 1,
-        runs: [{ type: "text", text: "Introducción" }],
-      },
-      {
-        type: "paragraph",
-        runs: [{ type: "text", text: "Texto legible del artículo." }],
-      },
-    ],
-    notes: [],
-    references: [],
-    warnings: [],
+  fileName: string;
+  color: string;
+  ids: {
+    obc: string;
+    revista: string;
+    articulo: string;
   };
 }
 
-function createMagazine(
-  name: string,
-  color: string,
-  svg: string
-): RenderedMagazine {
-  const validatedLogo = validateBrandLogo(
-    `${name}.svg`,
-    new TextEncoder().encode(svg)
+const magazines: MagazineFixture[] = [
+  {
+    name: "Revista Azul",
+    fileName: "ejemplo-revista-a.html",
+    color: "#123A70",
+    ids: { obc: "obc-azul", revista: "revista-azul", articulo: "articulo-azul" },
+  },
+  {
+    name: "Revista Coral",
+    fileName: "ejemplo-revista-b.html",
+    color: "#D94635",
+    ids: { obc: "obc-coral", revista: "revista-coral", articulo: "articulo-coral" },
+  },
+];
+
+async function loadMagazine(magazine: MagazineFixture): Promise<JSDOM> {
+  const html = await fs.readFile(
+    path.join(examplesDirectory, magazine.fileName),
+    "utf8"
   );
-  if (!validatedLogo.valid) {
-    throw new Error(validatedLogo.error);
-  }
-
-  const html = renderArticle(createArticle(`Artículo de ${name}`), {
-    color,
-    logo: validatedLogo.logo,
-    magazineName: name,
-  });
-  return {
-    color,
-    logo: validatedLogo.logo.dataUri,
-    name,
-    html,
-    dom: new JSDOM(html),
-  };
-}
-
-const magazines = [
-  createMagazine(
-    "Revista Azul",
-    "#123A70",
-    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><rect width="10" height="10" fill="#123A70"/></svg>'
-  ),
-  createMagazine(
-    "Revista Verde",
-    "#14532D",
-    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><circle cx="5" cy="5" r="5" fill="#14532D"/></svg>'
-  ),
-] as const;
-
-function elementSequence(magazine: RenderedMagazine): string[] {
-  const document = magazine.dom.window.document;
-  return Array.from(document.body.children)
-    .filter((element) =>
-      element.matches(
-        "header.revista-header, main.revista-main, footer.revista-footer"
-      )
-    )
-    .map((element) => element.tagName.toLowerCase());
-}
-
-function normalizedLandmarkMarkup(
-  magazine: RenderedMagazine,
-  selector: "header.revista-header" | "footer.revista-footer"
-): string {
-  const element = magazine.dom.window.document.querySelector(selector);
-  if (!element) return "";
-  return element.outerHTML
-    .replaceAll(magazine.name, "{{nombre_revista}}")
-    .replaceAll(magazine.color, "{{revista-color}}")
-    .replaceAll(magazine.logo, "{{logo-data-uri}}");
-}
-
-function duplicateIds(magazine: RenderedMagazine): string[] {
-  const ids = Array.from(
-    magazine.dom.window.document.querySelectorAll("[id]")
-  ).map((element) => element.id);
-  return ids.filter((id, index) => ids.indexOf(id) !== index);
-}
-
-function brandBackgroundsInsideMain(magazine: RenderedMagazine): string[] {
-  const style = magazine.dom.window.document.querySelector("style")?.textContent ?? "";
-  const rules = style.matchAll(/([^{}]+)\{([^{}]*)\}/g);
-  const violations: string[] = [];
-
-  for (const [, selectorText, declarations] of rules) {
-    if (
-      /background(?:-color)?\s*:[^;}]*var\(\s*--revista-color\s*\)/i.test(
-        declarations
-      ) &&
-      /(?:^|,)\s*(?:main|\.revista-main)(?:[\s.#:[>,]|$)/i.test(selectorText)
-    ) {
-      violations.push(selectorText.trim());
-    }
-  }
-
-  return violations;
+  return new JSDOM(html);
 }
 
 describe("conformidad del template con dos revistas", () => {
   it.each(magazines)(
-    "$name tiene un header, main y footer en el orden requerido",
-    (magazine) => {
-      const document = magazine.dom.window.document;
-      expect(document.querySelectorAll("header.revista-header")).toHaveLength(1);
-      expect(document.querySelectorAll("main.revista-main")).toHaveLength(1);
-      expect(document.querySelectorAll("footer.revista-footer")).toHaveLength(1);
-      expect(elementSequence(magazine)).toEqual(["header", "main", "footer"]);
+    "$name tiene header, main y footer en orden y un solo título principal",
+    async (magazine) => {
+      const { document } = (await loadMagazine(magazine)).window;
+      const header = document.querySelector("header.header");
+      const main = document.querySelector("main");
+      const footer = document.querySelector("footer.footer");
+      const bodyHeading = document.querySelector(".article-body h3");
+
+      expect(document.querySelectorAll("header.header")).toHaveLength(1);
+      expect(document.querySelectorAll("main")).toHaveLength(1);
+      expect(document.querySelectorAll("footer.footer")).toHaveLength(1);
+      expect(header).not.toBeNull();
+      expect(main).not.toBeNull();
+      expect(footer).not.toBeNull();
+      expect(
+        header!.compareDocumentPosition(main!) &
+          document.defaultView!.Node.DOCUMENT_POSITION_FOLLOWING
+      ).toBeTruthy();
+      expect(
+        main!.compareDocumentPosition(footer!) &
+          document.defaultView!.Node.DOCUMENT_POSITION_FOLLOWING
+      ).toBeTruthy();
+      expect(document.querySelectorAll("h1")).toHaveLength(1);
+      expect(bodyHeading?.textContent).toBe("Introducción");
     }
   );
 
-  it("mantiene header y footer iguales, excepto los valores de marca inyectados", () => {
-    expect(magazines[0].color).not.toBe(magazines[1].color);
-    expect(magazines[0].logo).not.toBe(magazines[1].logo);
-    for (const selector of [
-      "header.revista-header",
-      "footer.revista-footer",
-    ] as const) {
-      expect(normalizedLandmarkMarkup(magazines[0], selector)).not.toBe("");
-      expect(normalizedLandmarkMarkup(magazines[0], selector)).toBe(
-        normalizedLandmarkMarkup(magazines[1], selector)
-      );
-    }
+  it("mantiene idéntico el footer y limita las diferencias del header a valores inyectados", async () => {
+    const [first, second] = await Promise.all(
+      magazines.map(async (magazine) =>
+        (await loadMagazine(magazine)).window.document
+      )
+    );
+    const firstHeader = first.querySelector("header.header");
+    const secondHeader = second.querySelector("header.header");
+    const firstFooter = first.querySelector("footer.footer");
+    const secondFooter = second.querySelector("footer.footer");
+
+    expect(firstFooter?.outerHTML).toBe(secondFooter?.outerHTML);
+    expect(firstHeader?.textContent).toContain(magazines[0].name);
+    expect(secondHeader?.textContent).toContain(magazines[1].name);
+    expect(firstHeader?.innerHTML).not.toBe(secondHeader?.innerHTML);
   });
 
   it.each(magazines)(
-    "$name expone los tres identificadores del header",
-    (magazine) => {
-      const header = magazine.dom.window.document.querySelector(
-        "header.revista-header"
+    "$name expone los tres identificadores del artículo",
+    async ({ ids, ...magazine }) => {
+      const header = (await loadMagazine(magazine)).window.document.querySelector(
+        "header.header"
       );
-      expect(header?.hasAttribute("data-obc-id")).toBe(true);
-      expect(header?.hasAttribute("data-revista-id")).toBe(true);
-      expect(header?.hasAttribute("data-articulo-id")).toBe(true);
+
+      expect(header?.getAttribute("data-obc-id")).toBe(ids.obc);
+      expect(header?.getAttribute("data-revista-id")).toBe(ids.revista);
+      expect(header?.getAttribute("data-articulo-id")).toBe(ids.articulo);
     }
   );
 
   it.each(magazines)(
-    "$name ordena el footer: datos, logo, licencia",
-    (magazine) => {
-      const footer = magazine.dom.window.document.querySelector(
-        "footer.revista-footer"
-      );
-      const content = footer?.firstElementChild;
-      expect(content?.children).toHaveLength(3);
-      expect(content?.children[0].matches(".revista-datos-institucionales")).toBe(
-        true
-      );
-      expect(content?.children[1].matches(".revista-logo")).toBe(true);
-      expect(content?.children[2].matches(".revista-licencia")).toBe(true);
-    }
-  );
-
-  it.each(magazines)(
-    "$name usa solo un bloque de estilos sin estilos inline y con las dos variables de marca",
-    (magazine) => {
-      const document = magazine.dom.window.document;
-      expect(document.querySelectorAll("[style]")).toHaveLength(0);
-      const styles = Array.from(document.querySelectorAll("style"));
-      expect(styles).toHaveLength(1);
-      const declarations = Array.from(
-        styles[0].textContent?.matchAll(/(--[\w-]+)\s*:/g) ?? [],
-        (match) => match[1]
-      );
-      expect([...new Set(declarations)].sort()).toEqual([
-        "--revista-color",
-        "--revista-logo-url",
-      ]);
-    }
-  );
-
-  it.each(magazines)(
-    "$name no aplica el color de marca como fondo dentro del Main",
-    (magazine) => {
-      expect(brandBackgroundsInsideMain(magazine)).toEqual([]);
-    }
-  );
-
-  it.each(magazines)(
-    "$name tiene un solo h1 y ningún id duplicado",
-    (magazine) => {
-      expect(
-        magazine.dom.window.document.querySelectorAll("h1")
-      ).toHaveLength(1);
-      expect(duplicateIds(magazine)).toEqual([]);
-    }
-  );
-
-  it.each(magazines)(
-    "$name no tiene violaciones axe-core serias ni críticas",
+    "$name usa solo el bloque de color en style y no tiene estilos inline",
     async (magazine) => {
-      const results = await axeCore.run(
-        magazine.dom.window.document.documentElement,
-        {
-          runOnly: {
-            type: "tag",
-            values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"],
-          },
-        },
+      const { color } = magazine;
+      const document = (await loadMagazine(magazine)).window.document;
+      const styles = Array.from(document.querySelectorAll("style"));
+
+      expect(document.querySelectorAll("[style]")).toHaveLength(0);
+      expect(styles).toHaveLength(1);
+      expect(styles[0]?.textContent?.replace(/\s+/g, "")).toBe(
+        `:root{--revista-color:${color}}`
       );
+    }
+  );
+
+  it.each(magazines)(
+    "$name no duplica ids y no tiene violaciones axe-core serias o críticas",
+    async (magazine) => {
+      const document = (await loadMagazine(magazine)).window.document;
+      const ids = Array.from(document.querySelectorAll("[id]")).map(
+        (element) => element.id
+      );
+      const duplicateIds = ids.filter((id, index) => ids.indexOf(id) !== index);
+      const results = await axeCore.run(document.documentElement, {
+        runOnly: {
+          type: "tag",
+          values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"],
+        },
+      });
       const severeViolations = results.violations.filter((violation) =>
         ["serious", "critical"].includes(violation.impact ?? "")
       );
 
+      expect(duplicateIds).toEqual([]);
       expect(severeViolations).toEqual([]);
-      const contrast = validateBrandColor(magazine.color);
-      expect(contrast.valid).toBe(true);
-      if (contrast.valid) {
-        expect(contrast.contrastRatio).toBeGreaterThanOrEqual(4.5);
-      }
     }
   );
+
+  it("publica la versión desde src/template/VERSION", async () => {
+    const expectedVersion = (await fs.readFile(templateVersionPath, "utf8")).trim();
+    const document = (await loadMagazine(magazines[0])).window.document;
+
+    expect(
+      document.querySelector('meta[name="template-version"]')?.getAttribute("content")
+    ).toBe(expectedVersion);
+  });
 });

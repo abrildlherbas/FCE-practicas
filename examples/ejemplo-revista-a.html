@@ -1,0 +1,465 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="template-version" content="1.0.0" />
+  <title>Intensificación tecnológica y eficiencia económica en sistemas ganaderos subhúmedos: El modelo de la Estación Experimental Agropecuaria Bordenave (EEA) del Instituto Nacional de Tecnología Agropecuaria (INTA)</title>
+  <style>
+:root {
+  color-scheme: light;
+  --article-paper: #fffefa;
+  --article-ink: #202522;
+  --article-muted: #5e6962;
+  --article-accent: #245b4b;
+  --article-rule: #d8ded8;
+  --article-surface: #f3f5f1;
+  --article-font-body: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --article-font-ui: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--article-paper);
+  color: var(--article-ink);
+  font-family: var(--article-font-body);
+  line-height: 1.6;
+}
+
+a {
+  color: var(--revista-color, var(--article-accent));
+  text-underline-offset: 0.18em;
+}
+
+a:focus-visible {
+  outline: 3px solid currentColor;
+  outline-offset: 3px;
+}
+
+.header,
+.footer {
+  font-family: var(--article-font-ui);
+  background-color: var(--revista-color);
+  color: #fff;
+}
+
+.header a,
+.footer a {
+  color: #fff;
+}
+
+.header {
+  border-bottom: 1px solid var(--article-rule);
+}
+
+.journal-masthead,
+.footer-inner,
+.article-content {
+  width: min(70ch, calc(100% - 2rem));
+  margin-inline: auto;
+}
+
+.journal-masthead {
+  padding-block: 1.25rem;
+  color: #fff;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.article-content {
+  padding-block: clamp(2.5rem, 7vw, 5.5rem);
+}
+
+main {
+  background-color: var(--article-paper);
+}
+
+.article-heading {
+  margin: 0 0 1rem;
+  font-size: clamp(2rem, 5vw, 3.4rem);
+  font-weight: 500;
+  line-height: 1.12;
+  letter-spacing: -0.035em;
+}
+
+.article-title-translation {
+  margin: -0.25rem 0 1.5rem;
+  color: var(--article-muted);
+  font-size: 1.35rem;
+  font-style: italic;
+}
+
+.article-byline,
+.article-affiliations,
+.article-dates,
+.article-identifiers,
+.article-keywords,
+.article-jel {
+  color: var(--article-muted);
+  font-family: var(--article-font-ui);
+  font-size: 0.9rem;
+}
+
+.article-byline {
+  margin: 0.75rem 0 0;
+  color: var(--article-ink);
+}
+
+.article-affiliations {
+  margin: 0.35rem 0 1.5rem;
+  padding-left: 1.25rem;
+}
+
+.article-affiliations li + li {
+  margin-top: 0.25rem;
+}
+
+.affiliation-marker {
+  font-weight: 700;
+}
+
+.article-orcid {
+  margin-left: 0.25rem;
+  font-size: 0.8em;
+}
+
+.article-abstract {
+  margin-block: 2rem 3rem;
+  padding: 1.25rem 1.5rem;
+  border-left: 3px solid var(--revista-color, var(--article-accent));
+  background: var(--article-surface);
+}
+
+.article-abstract h2,
+.article-content h2,
+.article-content h3,
+.article-content h4,
+.article-content h5,
+.article-content h6 {
+  color: var(--article-ink);
+  font-family: var(--article-font-ui);
+  line-height: 1.3;
+}
+
+.article-abstract h2 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.article-abstract p {
+  margin: 0;
+}
+
+.article-metadata {
+  margin-block: 1.5rem 3rem;
+  padding-block: 1rem;
+  border-block: 1px solid var(--article-rule);
+}
+
+.article-metadata p {
+  margin: 0.35rem 0;
+}
+
+.article-content h2 {
+  margin-top: 2.5rem;
+  font-size: 1.6rem;
+}
+
+.article-header .article-heading {
+  margin-top: 0;
+  font-size: clamp(2rem, 5vw, 3.4rem);
+}
+
+.article-content h3 {
+  margin-top: 2rem;
+  font-size: 1.3rem;
+}
+
+.article-content h4,
+.article-content h5,
+.article-content h6 {
+  margin-top: 1.5rem;
+  font-size: 1.1rem;
+}
+
+.article-paragraph {
+  margin-block: 0 1.25rem;
+  white-space: pre-wrap;
+}
+
+.note-reference {
+  color: var(--revista-color, var(--article-accent));
+  font-family: var(--article-font-ui);
+  font-size: 0.75em;
+  line-height: 0;
+  vertical-align: super;
+}
+
+.article-figure {
+  margin: 2rem 0;
+  text-align: center;
+}
+
+.article-figure img {
+  max-width: 100%;
+  height: auto;
+}
+
+.article-table-wrap {
+  overflow-x: auto;
+  margin-block: 2rem;
+}
+
+.article-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+}
+
+.article-table caption {
+  padding: 0.6rem;
+  color: var(--article-muted);
+  font-family: var(--article-font-ui);
+  font-size: 0.85rem;
+  text-align: left;
+}
+
+.article-table th,
+.article-table td {
+  padding: 0.65rem 0.8rem;
+  border-bottom: 1px solid var(--article-rule);
+  text-align: left;
+  vertical-align: top;
+}
+
+.article-table thead th,
+.article-table tbody th[scope="row"] {
+  color: var(--article-ink);
+  font-family: var(--article-font-ui);
+  font-weight: 600;
+}
+
+.article-notes,
+.article-references {
+  margin-top: 4rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--article-rule);
+}
+
+.article-notes h2,
+.article-references h2 {
+  margin-top: 0;
+  font-size: 1.4rem;
+}
+
+.article-notes li,
+.article-references li {
+  margin-block: 0.75rem;
+  padding-left: 0.25rem;
+}
+
+.reference-backlink {
+  display: inline-block;
+  margin-inline-start: 0.45rem;
+  font-family: var(--article-font-ui);
+}
+
+.reference-backlink::before {
+  content: "↩";
+}
+
+.note-backlinks {
+  margin-left: 0.5rem;
+  font-family: var(--article-font-ui);
+  font-size: 0.85rem;
+}
+
+.footer {
+  margin-top: 4rem;
+  border-top: 1px solid var(--article-rule);
+}
+
+.footer-inner {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-block: 1.5rem;
+  color: #fff;
+  font-size: 0.8125rem;
+}
+
+.footer-inner > * {
+  color: #fff;
+}
+
+.footer nav ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+@media (max-width: 36rem) {
+  .article-abstract {
+    padding: 1rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+:root{--revista-color:#123A70}</style>
+</head>
+<body>
+  <header class="header">
+    <div class="journal-masthead">Revista científica</div>
+  </header>
+  <main id="main-content">
+    <article class="article-content" aria-labelledby="article-title">
+      <header class="article-header">
+        <section class="article-data" aria-label="Datos del artículo">
+          <p class="article-header-source">https://doi.org/10.56503/rimf/Vol.1(2026)/3716</p>
+<h2 class="article-heading" id="article-title">Intensificación tecnológica y eficiencia económica en sistemas ganaderos subhúmedos: El modelo de la Estación Experimental Agropecuaria Bordenave (EEA) del Instituto Nacional de Tecnología Agropecuaria (INTA) </h2>
+<p class="article-header-source">Technological Intensification and Economic Efficiency in Subhumid Livestock Systems: The Model of the Bordenave Agricultural Experimental Station (EEA) of the National Institute of Agricultural Technology (INTA)</p>
+<p class="article-header-source">Carlos Torres Carbonelli,iii. https://orcid.org/0000-0002-2978-4326</p>
+<p class="article-header-source">Andrea Bollettaii. https://orcid.org/0000-0003-4887-7592</p>
+<p class="article-header-source">Sebastián Lagrangeii. https://orcid.org/0000-0002-0886-9646</p>
+<p class="article-header-source">Maximiliano Alonsoii. https://orcid.org/0009-0006-7677-6149</p>
+<p class="article-header-source">Andrea Laurici. https://orcid.org/0009-0001-1286-4194</p>
+<p class="article-header-source">Gerónimo De Leoi. https://orcid.org/0009-0009-5276-6642</p>
+<p class="article-header-source">i Instituto Nacional de Tecnología Agropecuaria (INTA). Agencia Bahía Blanca, Estación Experimental Agropecuaria Bordenave. San Andrés 800, Campus de la Universidad Nacional del Sur (8000), Bahía Blanca, Provincia de Buenos Aires, Argentina. carbonell.carlos@inta.gob.ar; Lauric.andrea@inta.gob.ar; Deleo.geronimo@inta.gob.ar</p>
+<p class="article-header-source">ii Instituto Nacional de Tecnología Agropecuaria (INTA). Estación Experimental Agropecuaria Bordenave. km 36,5 Ruta Provincial 76, (8187) Bordenave, Provincia de Buenos Aires. Argentina. Bolletta.andrea@inta.gob.ar; Lagrange.sebastian@inta.gob.ar; maxijalonso@gmail.com</p>
+<p class="article-header-source">iii Departamento de Agronomía, Universidad Nacional del Sur. San Andrés 800, Campus de la Universidad Nacional del Sur (8000), Bahía Blanca, Provincia de Buenos Aires, Argentina. carbonell.carlos@inta.gob.ar</p>
+<p class="article-header-source">RESUMEN</p>
+<p class="article-header-source">La adopción diferencial de tecnologías en los sistemas ganaderos genera brechas productivas y económicas cuya cuantificación es esencial para orientar políticas sectoriales regionales. El objetivo de este trabajo fue evaluar los indicadores tecnológicos y económicos de un modelo de ciclo completo de alta tecnología en la Unidad Experimental de Producción Animal de la EEA INTA Bordenave y compararlo con el sistema representativo de la región subhúmeda del sudoeste bonaerense. La metodología se basó en estudio de caso con análisis de margen bruto bajo normas AACREA. Los resultados mostraron que la Unidad de INTA supera al sistema regional en producción de carne en un 129% y en margen bruto por hectárea en un 454%. La brecha se explica principalmente por la diversificación forrajera, que incluye gramíneas perennes y leguminosas de alto valor nutritivo como alfalfa y sainfoin, una carga de invernada 562% superior y ganancias diarias de peso 62% mayores. El análisis por tipo de desembolso revela que el resultado financiero operativo directo fue también superior en la Unidad del INTA (+398%), con una relación costo-ingreso que evidencia eficiencia en la dilución de costos fijos. Estos hallazgos confirman la hipótesis de que la intensificación tecnológica ajustada a las condiciones agroecológicas regionales constituye una estrategia viable para reducir la brecha entre el potencial productivo de la región y los sistemas predominantes.</p>
+<p class="article-header-source">Palabras clave: Ganadería bovina, intensificación tecnológica, brecha productiva y económica.</p>
+<p class="article-header-source">Código JEL: Q12 </p>
+<p class="article-header-source">ABSTRAC</p>
+<p class="article-header-source">Differential technology adoption in livestock systems generates productive and economic gaps whose quantification is essential for guiding regional sectoral policies. This study aimed to evaluate the technological and economic indicators of a high-technology integrated cow-calf and pasture finishing model at the Beef Cattle Experimental Unit of INTA EEA Bordenave and compare it with the standard beef cattle system of the sub-humid region of southwest Buenos Aires Province. The methodology was based on a case study approach with gross margin analysis following AACREA standards. Results showed that the INTA Unit outperforms the regional beef cattle system in beef production by 129% and in gross margin per hectare by 454%. The gap is primarily explained by greater forage diversity, including perennial grasses and high-nutritional legumes such as alfalfa and sainfoin, stocking rate 562% higher at the stocker phase, and 62% greater average daily gains. Analysis by expenditure type reveals that financial result was also higher in the INTA Unit (+398%), with a cost-income ratio revealing efficiency in fixed cost dilution. These findings confirm the hypothesis that technological intensification, adapted to regional agroecological conditions, constitutes a feasible strategy for reducing gaps between regional productive potential and prevailing beef cattle production systems.</p>
+<p class="article-header-source">Key words: Beef cattle, technological intensification, productive and economic gap.</p>
+<p class="article-header-source">Código JEL: Q12</p>
+<p class="article-header-source">Recibido: 14/03/2026</p>
+<p class="article-header-source">Aceptado: 22/05/2026</p>
+<p class="article-header-source">Publicado: 30/06/2026</p>
+        </section>
+      </header>
+      <section class="article-body" aria-label="Texto del artículo">
+        <p class="article-paragraph" data-bloque-id="b-0">Introducción</p>
+<p class="article-paragraph" data-bloque-id="b-1">La demanda global de proteína animal crecerá entre un 40% y un 57% hacia 2050 (<a id="revista-cita-17-1" class="article-citation" href="#revista-ref-17" aria-label="Ir a la referencia 17" role="doc-biblioref">Herrero et al., 2020</a>), ejerciendo presión creciente sobre la capacidad productiva de los sistemas ganaderos extensivos. En Argentina, la ganadería bovina representa una actividad estructural del sector agropecuario con aproximadamente 54 millones de cabezas (Menchaca &amp; Vieites, 2024), concentrada históricamente en la región pampeana. Sin embargo, el desplazamiento de la ganadería hacia zonas más marginales, consecuencia de la expansión agrícola, hace que regiones como el sudoeste bonaerense, caracterizadas por la escasez de precipitaciones y la alta variabilidad climática interanual, enfrenten el desafío de intensificar la producción en condiciones agroecológicas limitantes.</p>
+<p class="article-paragraph" data-bloque-id="b-2">La gestión integrada de tecnologías forrajeras constituye una palanca central para mejorar la eficiencia de conversión y la rentabilidad de los sistemas ganaderos (<a id="revista-cita-10-1" class="article-citation" href="#revista-ref-10" aria-label="Ir a la referencia 10" role="doc-biblioref">Delevatti et al., 2019</a>). Estudios en la región pampeana argentina señalan que el incremento en la carga animal soportado por una base forrajera diversificada genera efectos de dilución de costos fijos e incrementa el valor marginal del forraje incorporado (<a id="revista-cita-4-1" class="article-citation" href="#revista-ref-4" aria-label="Ir a la referencia 4" role="doc-biblioref">Bilotto et al., 2021</a>). Paralelamente, la diversificación de actividades ganaderas entre cría, recría y ciclo completo ha demostrado reducir la variabilidad del retorno sobre el capital en contextos de alta incertidumbre climática y de precios (<a id="revista-cita-24-1" class="article-citation" href="#revista-ref-24" aria-label="Ir a la referencia 24" role="doc-biblioref">Pacín &amp; Oesterheld, 2014</a>; <a id="revista-cita-2-1" class="article-citation" href="#revista-ref-2" aria-label="Ir a la referencia 2" role="doc-biblioref">Bell et al., 2021</a>).</p>
+<p class="article-paragraph" data-bloque-id="b-3">A escala global, el modelo de intensificación sostenible representa el paradigma dominante para incrementar la producción por unidad de superficie sin ampliar la frontera ganadera (<a id="revista-cita-26-1" class="article-citation" href="#revista-ref-26" aria-label="Ir a la referencia 26" role="doc-biblioref">Romanzini et al., 2020</a>; <a id="revista-cita-22-1" class="article-citation" href="#revista-ref-22" aria-label="Ir a la referencia 22" role="doc-biblioref">Lopes et al., 2020</a>). En sistemas de pasturas perennes adaptadas de la región pampeana, la incorporación de leguminosas perennes, en particular especies con taninos condensados como el sainfoin (Onobrychis viciifolia), ha mostrado beneficios múltiples como una mayor tasa de digestión, aumento del consumo voluntario, mejora de las ganancias diarias de peso y reducciones de emisiones de metano entérico (<a id="revista-cita-5-1" class="article-citation" href="#revista-ref-5" aria-label="Ir a la referencia 5" role="doc-biblioref">Bolletta, 2020</a>; <a id="revista-cita-20-1" class="article-citation" href="#revista-ref-20" aria-label="Ir a la referencia 20" role="doc-biblioref">Lagrange et al., 2020</a>; <a id="revista-cita-23-1" class="article-citation" href="#revista-ref-23" aria-label="Ir a la referencia 23" role="doc-biblioref">MacAdam et al., 2024</a>).</p>
+<p class="article-paragraph" data-bloque-id="b-4">La cuantificación económica rigurosa de estas brechas tecnológicas en contextos regionales específicos es aún escasa en la literatura nacional. Los estudios comparativos de Margen Bruto (MB) que integren análisis de costos por tipo de desembolso y por función productiva, siguiendo metodologías estandarizadas AACREA/INTA, son una herramienta indispensable para traducir los avances técnicos en señales concretas para la toma de decisiones empresarial y la formulación de políticas sectoriales agrarias y de la extensión (<a id="revista-cita-13-1" class="article-citation" href="#revista-ref-13" aria-label="Ir a la referencia 13" role="doc-biblioref">Ghida Daza et al., 2009</a>).</p>
+<p class="article-paragraph" data-bloque-id="b-5">La hipótesis de este trabajo postula que la implementación de un modelo de ciclo completo de alta tecnología, ajustado a las condiciones agroecológicas del sudoeste bonaerense, genera mejoras significativas y cuantificables en rentabilidad y eficiencia respecto al sistema regional predominante. El objetivo es evaluar los indicadores productivos y económicos de la Unidad Experimental de Producción Animal de la EEA INTA Bordenave y compararlos con el modelo representativo del Sistema Subhúmedo, identificando los factores de mayor impacto diferencial.</p>
+<p class="article-paragraph" data-bloque-id="b-6">Marco Teórico</p>
+<p class="article-paragraph" data-bloque-id="b-7">La empresa agropecuaria enfrenta decisiones de asignación de recursos bajo condiciones de incertidumbre climática, tecnológica y de mercado. En este contexto, el análisis de MB constituye el instrumento de gestión más utilizado en empresas ganaderas argentinas para evaluar la rentabilidad de actividades y sistemas productivos (<a id="revista-cita-12-1" class="article-citation" href="#revista-ref-12" aria-label="Ir a la referencia 12" role="doc-biblioref">Frank, 1995</a>; <a id="revista-cita-14-1" class="article-citation" href="#revista-ref-14" aria-label="Ir a la referencia 14" role="doc-biblioref">González &amp; Pagliettini, 2001</a>). El MB representa la diferencia entre los ingresos netos y los costos directos de producción, y permite comparar sistemas de diferente escala sobre una base normalizada por unidad de superficie.</p>
+<p class="article-paragraph" data-bloque-id="b-8">La literatura internacional sobre intensificación ganadera muestra que la relación entre carga animal, base forrajera y resultado económico no es lineal. <a id="revista-cita-26-2" class="article-citation" href="#revista-ref-26" aria-label="Ir a la referencia 26" role="doc-biblioref">Romanzini et al. (2020)</a>, en un estudio de evaluación económica de sistemas con intensificación creciente en pasturas tropicales de Brasil, encontraron que el aumento en la producción de carne por hectárea se traslada de manera no proporcional al margen neto, dado que los costos erogables crecen a una tasa mayor que los ingresos en los tramos de mayor intensificación. En contrapartida, <a id="revista-cita-22-2" class="article-citation" href="#revista-ref-22" aria-label="Ir a la referencia 22" role="doc-biblioref">Lopes et al. (2020)</a> y <a id="revista-cita-4-2" class="article-citation" href="#revista-ref-4" aria-label="Ir a la referencia 4" role="doc-biblioref">Bilotto et al. (2021)</a> señalan que la incorporación de forrajes de alta calidad genera un efecto de dilución de costos de mantenimiento del rodeo que puede superar dicho efecto de compresión de márgenes.</p>
+<p class="article-paragraph" data-bloque-id="b-9">La diversificación de la base forrajera es reconocida como una estrategia de reducción de riesgo productivo y climático. <a id="revista-cita-2-2" class="article-citation" href="#revista-ref-2" aria-label="Ir a la referencia 2" role="doc-biblioref">Bell et al. (2021)</a>, en un análisis de 78 explotaciones mixtas de la región pampeana australiana, demostraron que los sistemas con mayor diversificación de cultivos forrajeros presentan coeficientes de variación del retorno sobre el capital significativamente menores que los sistemas especializados. Este efecto se potencia cuando la diversificación incluye especies de diferente estacionalidad, como la combinación de pasturas de fotosíntesis C3 y C4, y verdeos de invierno y verano.</p>
+<p class="article-paragraph" data-bloque-id="b-10">En el ámbito específico de las leguminosas forrajeras, la inclusión de especies con taninos condensados como el sainfoin (Onobrychis viciifolia) ha recibido atención creciente por sus efectos sobre la reducción de la incidencia del timpanismo espumoso, la eficiencia de utilización del nitrógeno y sobre el desempeño animal (<a id="revista-cita-15-1" class="article-citation" href="#revista-ref-15" aria-label="Ir a la referencia 15" role="doc-biblioref">Guevara, 2019</a>; <a id="revista-cita-19-1" class="article-citation" href="#revista-ref-19" aria-label="Ir a la referencia 19" role="doc-biblioref">Lagrange y Villalba, 2019</a>; <a id="revista-cita-33-1" class="article-citation" href="#revista-ref-33" aria-label="Ir a la referencia 33" role="doc-biblioref">Villalba et al., 2019</a>). <a id="revista-cita-27-1" class="article-citation" href="#revista-ref-27" aria-label="Ir a la referencia 27" role="doc-biblioref">Schaub et al. (2020)</a> encontraron en pasturas semi-naturales de Europa que el incremento de la diversidad vegetal se asoció con mayor calidad forrajera y mayor estabilidad del rendimiento interanual, con implicancias económicas positivas para los productores.</p>
+<p class="article-paragraph" data-bloque-id="b-11">La inclusión de sainfoin en pasturas de alfalfa (Medicago sativa) podría mejorar la eficiencia de utilización de la proteína a nivel ruminal de esta última, ya que el consumo de sainfoin reduce las excreciones de nitrógeno urinario en bovinos (<a id="revista-cita-20-2" class="article-citation" href="#revista-ref-20" aria-label="Ir a la referencia 20" role="doc-biblioref">Lagrange et al., 2020</a>). Por otro lado, las ganancias diarias de peso de vaquillonas pastoreando leguminosas con taninos condensados como sainfoin y Lotus corniculatus fueron un 40% mayores que las de aquellas pastoreando alfalfa en monocultivo (1,05 vs. 0,74 kg/día), y la combinación en pastoreo de tres leguminosas distintas produjo ganancias aún superiores (1,21 kg/día) con consumos 33% mayores (<a id="revista-cita-21-1" class="article-citation" href="#revista-ref-21" aria-label="Ir a la referencia 21" role="doc-biblioref">Lagrange et al., 2021</a>).</p>
+<p class="article-paragraph" data-bloque-id="b-12">En cuanto a los modelos de clasificación de costos, la metodología que distingue entre costos erogables, contables y económicos siguiendo la tipología de <a id="revista-cita-11-1" class="article-citation" href="#revista-ref-11" aria-label="Ir a la referencia 11" role="doc-biblioref">Espósito (1995)</a> y <a id="revista-cita-14-2" class="article-citation" href="#revista-ref-14" aria-label="Ir a la referencia 14" role="doc-biblioref">González &amp; Pagliettini (2001)</a>, permite identificar con precisión el resultado financiero operativo disponible para el servicio de deudas y la remuneración del capital propio, diferenciándolo del resultado económico que incluye los costos de oportunidad de los activos inmovilizados. Esta distinción es relevante para la gestión de empresas con diferentes estructuras de financiamiento y acceso al crédito (<a id="revista-cita-12-2" class="article-citation" href="#revista-ref-12" aria-label="Ir a la referencia 12" role="doc-biblioref">Frank, 1995</a>).</p>
+<p class="article-paragraph" data-bloque-id="b-13">Metodología</p>
+<p class="article-paragraph" data-bloque-id="b-14">El presente estudio adoptó un enfoque de estudio de caso comparativo (<a id="revista-cita-7-1" class="article-citation" href="#revista-ref-7" aria-label="Ir a la referencia 7" role="doc-biblioref">Castro-Monge, 2010</a>), aplicando técnicas de análisis y modelado de escenarios bajo metodologías estandarizadas por el Área de Economía y Sociología del INTA (<a id="revista-cita-13-2" class="article-citation" href="#revista-ref-13" aria-label="Ir a la referencia 13" role="doc-biblioref">Ghida Daza et al., 2009</a>) y las normas AACREA (1990).</p>
+<p class="article-paragraph" data-bloque-id="b-15">Sistemas productivos analizados:</p>
+<p class="article-paragraph" data-bloque-id="b-16">Se contrastaron los siguientes dos modelos ganaderos de ciclo completo representativos de la región subhúmeda del sudoeste de Buenos Aires (precipitaciones medias: 600–800 mm, con alta variabilidad interanual; <a id="revista-cita-28-1" class="article-citation" href="#revista-ref-28" aria-label="Ir a la referencia 28" role="doc-biblioref">Scian et al., 2006</a>).</p>
+<p class="article-paragraph" data-bloque-id="b-17">1. Unidad Experimental de Producción Animal del INTA EEA Bordenave (UEPA): ubicada en el sector norte del Partido de Puán. Los indicadores corresponden al ejercicio real 2022/23, sistematizados a partir de registros productivos, comerciales y contables de la Unidad.</p>
+<p class="article-paragraph" data-bloque-id="b-18">2. Sistema representativo de la región Subhúmeda del Sudoeste Bonaerense (SSB): modelo sistematizado y utilizado por la Secretaría de Bioeconomía del Ministerio de Economía para los estudios ganaderos de la República Argentina (Vidal &amp; Moares, 2024).</p>
+<p class="article-paragraph" data-bloque-id="b-19">Determinación del margen bruto y sus componentes</p>
+<p class="article-paragraph" data-bloque-id="b-20">El MB se determinó según la ecuación:</p>
+<p class="article-paragraph" data-bloque-id="b-21">                                                        (1)</p>
+<p class="article-paragraph" data-bloque-id="b-22">donde IN representa los Ingresos Netos y CD los Costos Directos totales. Los IN se calcularon como:</p>
+<p class="article-paragraph" data-bloque-id="b-23">                                                              2)</p>
+<p class="article-paragraph" data-bloque-id="b-24">                                                             (3)</p>
+<p class="article-paragraph" data-bloque-id="b-25">                                                           (4)</p>
+<p class="article-paragraph" data-bloque-id="b-26">siendo IV los ingresos por ventas netos de gastos de comercialización (GC), EC los egresos por compras, C el valor de las compras, y DI la variación de inventario ganadero.</p>
+<p class="article-paragraph" data-bloque-id="b-27">Los CD se segregaron en tres componentes: (a) gastos directos erogables (alimentación, sanidad, mano de obra directa); (b) amortizaciones directas calculadas por el método lineal según vidas útiles de <a id="revista-cita-12-3" class="article-citation" href="#revista-ref-12" aria-label="Ir a la referencia 12" role="doc-biblioref">Frank (1995)</a>; y (c) intereses directos como costo de oportunidad del capital directo, aplicando tasas del 8% para activos fijos y del 10% para capital circulante (<a id="revista-cita-14-3" class="article-citation" href="#revista-ref-14" aria-label="Ir a la referencia 14" role="doc-biblioref">González &amp; Pagliettini, 2001</a>).</p>
+<p class="article-paragraph" data-bloque-id="b-28">El análisis se realizó a precios corrientes expresados en dólares estadounidenses (USD) según tipo de cambio vendedor del Banco de la Nación Argentina del 31/01/2026 ($ 1.415/USD). Esta decisión metodológica permite atenuar el efecto distorsivo de la inflación argentina sobre los valores absolutos en moneda local y facilita la comparación con la literatura internacional. Los costos se clasificaron adicionalmente por: (a) funciones de producción y comercialización, y (b) tipo de desembolso, erogables, contables y económicos, siguiendo la tipología de <a id="revista-cita-11-2" class="article-citation" href="#revista-ref-11" aria-label="Ir a la referencia 11" role="doc-biblioref">Espósito (1995)</a>. </p>
+<p class="article-paragraph" data-bloque-id="b-29">Resultados</p>
+<p class="article-paragraph" data-bloque-id="b-30">El análisis de la composición de la oferta forrajera revela diferencias estructurales sustantivas entre ambos sistemas (Figura 1). La UEPA presenta una base forrajera diversificada, con cuatro tipos de recursos complementarios, dados por pasturas perennes C3 (35%, gramíneas, alfalfa y sainfoin), pasturas perennes C4 (17%), verdeos de invierno (27%) y verdeos de verano (21%). La cobertura de doble cultivo alcanza el 27,1% de la superficie (26,4 ha sobre 97,5 ha totales). El SSB, en cambio, se apoya en un 84% de campo natural y sólo un 16% de pasturas perennes C3 sembradas.</p>
+<p class="article-paragraph" data-bloque-id="b-31">Esta configuración en la UEPA refleja la estrategia de asegurar oferta forrajera de calidad en todas las estaciones del año, clave para sostener altas tasas de ganancias diarias en la invernada (<a id="revista-cita-29-1" class="article-citation" href="#revista-ref-29" aria-label="Ir a la referencia 29" role="doc-biblioref">Soder et al., 2007</a>; <a id="revista-cita-27-2" class="article-citation" href="#revista-ref-27" aria-label="Ir a la referencia 27" role="doc-biblioref">Schaub et al., 2020</a>). La inclusión de sainfoin, leguminosa con taninos condensados introducida desde Canadá hace unos años en EEA INTA Bordenave y evaluada consistentemente, representa una innovación de alto potencial para la región, dado que su perfil bioquímico mejora la eficiencia de utilización del nitrógeno ruminal y reduce las pérdidas de N al ambiente (<a id="revista-cita-5-2" class="article-citation" href="#revista-ref-5" aria-label="Ir a la referencia 5" role="doc-biblioref">Bolletta, 2020</a>; <a id="revista-cita-20-3" class="article-citation" href="#revista-ref-20" aria-label="Ir a la referencia 20" role="doc-biblioref">Lagrange et al., 2020</a>; <a id="revista-cita-23-2" class="article-citation" href="#revista-ref-23" aria-label="Ir a la referencia 23" role="doc-biblioref">MacAdam et al., 2024</a>).</p>
+<p class="article-paragraph" data-bloque-id="b-32">Fuente: elaboración propia</p>
+<figure class="article-figure" data-bloque-id="b-33"><img src="Carbonel_Cielo_assets/rId21_image1.png" alt="" /></figure>
+<p class="article-paragraph" data-bloque-id="b-34">Figura 1. Composición porcentual de la oferta forrajera por sistema productivo</p>
+<p class="article-paragraph" data-bloque-id="b-35">Tabla 1. Indicadores tecnológico-productivos comparativos UEPA y SSB</p>
+<div class="article-table-wrap" data-bloque-id="b-36"><table class="article-table"><tbody><tr><th scope="row">Indicador</th><td>UEPA</td><td>SSB</td></tr><tr><th scope="row">Superficie total (ha)</th><td>97,5</td><td>2.100</td></tr><tr><th scope="row">Superficie en doble cultivo (ha)</th><td>27,5</td><td>0,0</td></tr><tr><th scope="row">Superficie trabajada Total (ha)</th><td>125</td><td>2100</td></tr><tr><th scope="row">Carga vientres (EV ha⁻¹)</th><td>0,63</td><td>0,51</td></tr><tr><th scope="row">Tasa de destete (%)</th><td>87</td><td>75</td></tr><tr><th scope="row">Edad 1° servicio (meses)</th><td>15</td><td>24</td></tr><tr><th scope="row">Reposición (%)</th><td>20</td><td>19</td></tr><tr><th scope="row">Carga invernada (EV ha⁻¹)</th><td>0,33</td><td>0,05</td></tr><tr><th scope="row">GDP promedio invernada (kg cab⁻¹ día⁻¹)</th><td>0,808</td><td>0,500</td></tr><tr><th scope="row">Tiempo terminación machos (meses)</th><td>12</td><td>20,4</td></tr><tr><th scope="row">Producción de carne (kg PV ha⁻¹ año⁻¹)</th><td>194,2</td><td>69,5</td></tr><tr><th scope="row">Carga animal total (EV ha⁻¹)</th><td>0,96</td><td>0,56</td></tr></tbody></table></div>
+<p class="article-paragraph" data-bloque-id="b-37">Fuente: Elaboración propia.</p>
+<p class="article-paragraph" data-bloque-id="b-38">Perfil tecnológico comparado</p>
+<p class="article-paragraph" data-bloque-id="b-39">La Figura 2 sintetiza el perfil diferencial de ambos sistemas en cuatro indicadores clave de productividad y escala. El sistema UEPA supera al SSB en todos los ejes de productividad. La carga animal es sustancialmente mayor, tanto en stock físico (454,4 vs. 201,0 kg/ha) como en términos de equivalencias nutricionales ganaderas (0,96 vs. 0,56 EV/ha), lo que representa una capacidad de carga un 71% superior. Esta mayor carga y análogamente presión de pastoreo se traduce en una producción de carne marcadamente más alta, alcanzando los 194,2 kg/ha/año frente a los 69,5 kg del sistema SSB (+179%). Asimismo, el cálculo de la eficiencia de stock alcanza una mejora del 23% de 35 a 43 kg/ha. Esto sugiere que la palanca principal de diferenciación reside en la mayor receptividad y aprovechamiento de la base forrajera intensificada del sistema UEPA, permitiendo una extracción de carne altamente superior por cada kilo de animal mantenido en el campo.</p>
+<p class="article-paragraph" data-bloque-id="b-40">Fuente: elaboración propia.</p>
+<p class="article-paragraph" data-bloque-id="b-41">|</p>
+<figure class="article-figure" data-bloque-id="b-42"><img src="Carbonel_Cielo_assets/rId22_image2.png" alt="C:\Users\anavi\AppData\Local\Packages\AdobeSystemsIncorporated.AdobePhotoshopExpress_mtcwf2zmmt10c\LocalState\Share\Images\AdobeExpressPhotos_cac1e4ed9b5b4a6ab92a9ada9464d973_CopyEdited.png" /></figure>
+<p class="article-paragraph" data-bloque-id="b-43">Figura 2. Perfil comparativo de indicadores tecnológico-productivos de ambos sistemas</p>
+<p class="article-paragraph" data-bloque-id="b-44">Resultados económicos</p>
+<p class="article-paragraph" data-bloque-id="b-45">La Tabla 2 presenta los resultados económicos de ambos sistemas. El MB de la UEPA fue de USD 490,6 ha⁻¹, un 454% superior al del SSB (USD 88,5 ha⁻¹). Esta brecha de mayor magnitud respecto a ejercicios anteriores refleja tanto los cambios en precios relativos de insumos y productos actualizados a Enero 2026, como la diferente estructura de intensificación de ambos sistemas. El ingreso neto por hectárea de la UEPA (USD 762,4) superó al SSB (USD 199,3) en un 283%, mientras que los costos directos por hectárea de la UEPA (USD 271,8) resultaron un 145% mayores. La notable expansión del diferencial de margen frente al diferencial de costos explica la alta rentabilidad relativa del sistema intensivo en el contexto de precios vigente, muy superiores a los de los ejercicios anteriores a 2025 (<a id="revista-cita-32-1" class="article-citation" href="#revista-ref-32" aria-label="Ir a la referencia 32" role="doc-biblioref">Vidal &amp; Moares, 2025</a>).</p>
+<p class="article-paragraph" data-bloque-id="b-46">Tabla 2. Margen bruto para los dos sistemas estudiados</p>
+<div class="article-table-wrap" data-bloque-id="b-47"><table class="article-table"><tbody><tr><th scope="row">Componente</th><td>UEPA Total (USD)</td><td>SSB Total (USD)</td><td>UEPA (USD ha⁻¹)</td><td>SSB (USD ha⁻¹)</td></tr><tr><th scope="row">Ingresos Netos</th><td>95.306</td><td>418.549</td><td>762,4</td><td>199,3</td></tr><tr><th scope="row">Gastos Directos</th><td>16.627</td><td>102.473</td><td>133,0</td><td>48,8</td></tr><tr><th scope="row">Amortizaciones Directas</th><td>2.858</td><td>9046</td><td>22,9</td><td>4,3</td></tr><tr><th scope="row">Intereses Directos</th><td>14.495</td><td>121.233</td><td>116,0</td><td>57,7</td></tr><tr><th scope="row">Costos Directos Totales</th><td>33.979</td><td>232.753</td><td>271,8</td><td>110,8</td></tr><tr><th scope="row">MARGEN BRUTO</th><td>61.327</td><td>185.796</td><td>490,6</td><td>88,5</td></tr></tbody></table></div>
+<p class="article-paragraph" data-bloque-id="b-48">Fuente: Elaboración propia.</p>
+<p class="article-paragraph" data-bloque-id="b-49">Estructura de ingresos</p>
+<p class="article-paragraph" data-bloque-id="b-50">El análisis de los ingresos brutos por categoría (Tabla 3) revela que la UEPA concentra en un 65% del total su ingreso en la venta de novillos (USD 601 ha⁻¹), seguido por toros refugo (USD 85,2 ha⁻¹) y el refugo del sistema (USD 117,4 ha⁻¹). El SSB, por su parte, presenta los novillos como principal ingreso en un 46% del total (USD 99,2 ha⁻¹), seguido con una participación significativa del refugo del sistema (USD 42,5 ha⁻¹) y de los vientres vacíos/CUT (USD 39,5 ha⁻¹). Cabe señalar que la UEPA incorpora una pequeña entrada por grano de cebada (USD 12,8 ha⁻¹), propia de su sistema de doble cultivo, ausente en el SSB. El ingreso bruto total por hectárea de la UEPA (USD 927,1) es un 424% del mismo para SSB.</p>
+<p class="article-paragraph" data-bloque-id="b-51">Tabla 3. Estructura de ingresos brutos por categoría de los sistemas estudiados</p>
+<div class="article-table-wrap" data-bloque-id="b-52"><table class="article-table"><tbody><tr><th scope="row">Categoría / Producto</th><td>UEPA (USD ha⁻¹)</td><td>% total UEPA</td><td>SSB (USD ha⁻¹)</td><td>% total SSB</td></tr><tr><th scope="row">Novillos</th><td>601</td><td>65%</td><td>99,2</td><td>46%</td></tr><tr><th scope="row">Refugo del sistema</th><td>117,4</td><td>13%</td><td>42,5</td><td>20%</td></tr><tr><th scope="row">Toros refugo</th><td>85,2</td><td>9%</td><td>3,0</td><td>1%</td></tr><tr><th scope="row">Vaquillonas</th><td>81,9</td><td>9%</td><td>33,2</td><td>15%</td></tr><tr><th scope="row">Vientres vacíos/CUT</th><td>32,2</td><td>3%</td><td>39,5</td><td>18%</td></tr><tr><th scope="row">Grano de cebada (UEPA)</th><td>12,8</td><td>1%</td><td>—</td><td>—</td></tr><tr><th scope="row">TOTAL INGRESOS BRUTOS</th><td>927,1</td><td>100%</td><td>217,4</td><td>100%</td></tr></tbody></table></div>
+<p class="article-paragraph" data-bloque-id="b-53">Fuente: Elaboración propia.</p>
+<p class="article-paragraph" data-bloque-id="b-54">4.2.2 Análisis de costos por funciones</p>
+<p class="article-paragraph" data-bloque-id="b-55">La Tabla 4 presenta la descomposición de los costos directos por función productiva. En la UEPA, el rubro rodeos, que incluye la compra de animales externos para invernada (USD 126,1 ha⁻¹) y los costos de oportunidad del rodeo propio, representa el 64% de los costos de producción directos (USD 254,2 ha⁻¹). La alimentación explica el 25% (USD 99,2 ha⁻¹), con verdeos de invierno (USD 38,8), verdeos de verano (USD 25,8) y suplementación estratégica (USD 25,9) como sus principales componentes. En el SSB, el campo natural (USD 30,3 ha⁻¹) representa el 91% del costo de alimentación (USD 33 ha⁻¹ en total), y el rubro rodeos (USD 58,4 ha⁻¹), dominado por los costos de oportunidad del rodeo reproductor, es el componente de mayor peso.</p>
+<p class="article-paragraph" data-bloque-id="b-56">Tabla 4. Costos directos por función de ambos sistemas</p>
+<div class="article-table-wrap" data-bloque-id="b-57"><table class="article-table"><tbody><tr><th scope="row">Rubro</th><td>UEPA (USD ha⁻¹)</td><td>SSB (USD ha⁻¹)</td></tr><tr><th scope="row">Alimentación</th><td>99,2</td><td>33</td></tr><tr><th scope="row">Verdeos de Verano</th><td>25,8</td><td>—</td></tr><tr><th scope="row">Verdeos de Invierno</th><td>38,8</td><td>—</td></tr><tr><th scope="row">Campo Natural</th><td>—</td><td>30,3</td></tr><tr><th scope="row">Suplementos</th><td>25,9</td><td>—</td></tr><tr><th scope="row">Rodeos (compras + stock reproductivo)</th><td>254,2</td><td>58,4</td></tr><tr><th scope="row">Compras animales invernada</th><td>126,1</td><td>—</td></tr><tr><th scope="row">COP fijo vientres</th><td>52,1</td><td>27,5</td></tr><tr><th scope="row">Mano de Obra Directa</th><td>34,5</td><td>12,3</td></tr><tr><th scope="row">Sanidad</th><td>10</td><td>7,.1</td></tr><tr><th scope="row">Costos de Comercialización</th><td>38,6</td><td>18,1</td></tr><tr><th scope="row">TOTAL COSTOS DIRECTOS</th><td>271.8</td><td>110.8</td></tr></tbody></table></div>
+<p class="article-paragraph" data-bloque-id="b-58">Fuente: Elaboración propia.</p>
+<p class="article-paragraph" data-bloque-id="b-59">4.2.3 Análisis por tipo de desembolso</p>
+<p class="article-paragraph" data-bloque-id="b-60">La Tabla 5 presenta la clasificación por tipo de desembolso. El resultado financiero operativo directo, deduciendo únicamente los costos erogables (gastos directos erogables y costos de comercialización erogables, fue un 398% superior en UEPA. Esta diferencia de casi cuatro veces refleja la muy superior capacidad de generación de flujo de caja de la UEPA por unidad de superficie, en un contexto donde los precios de la hacienda en Enero 2026 son significativamente más altos en relación con los costos de insumos (<a id="revista-cita-32-2" class="article-citation" href="#revista-ref-32" aria-label="Ir a la referencia 32" role="doc-biblioref">Vidal &amp; Moares, 2025</a>). El resultado contable operativo directo, incorporando amortizaciones, fue de USD 738,2 vs. USD 148,6 ha⁻¹ en SSB (+397%). Luego de imputar los costos de oportunidad del capital expresados como intereses directos dados (USD 116 ha⁻¹ en UEPA vs. USD 57,7 ha⁻¹ en SSB), el resultado económico operativo de UEPA fue un 454% superior al de SSB, análogamente con el MB.</p>
+<p class="article-paragraph" data-bloque-id="b-61">Tabla 5. Clasificación por tipo de desembolso por sistema</p>
+<div class="article-table-wrap" data-bloque-id="b-62"><table class="article-table"><tbody><tr><th scope="row">Componente</th><td>UEPA (USD ha⁻¹)</td><td>SSB (USD ha⁻¹)</td></tr><tr><th scope="row">Total Ingresos Brutos por producción</th><td>927,1</td><td>217,4</td></tr><tr><th scope="row">Costos erogables (producción + comercialización)</th><td>166,0</td><td>64,5</td></tr><tr><th scope="row">RESULTADO FINANCIERO OPERATIVO DIRECTO</th><td>761,1</td><td>152,9</td></tr><tr><th scope="row">Amortizaciones/depreciaciones directas</th><td>22,9</td><td>4,3</td></tr><tr><th scope="row">RESULTADO CONTABLE OPERATIVO DIRECTO</th><td>738,2</td><td>148,6</td></tr><tr><th scope="row">Costos implícitos (intereses + costo de oportunidad)</th><td>116,0</td><td>57,7</td></tr><tr><th scope="row">RESULTADO ECONÓMICO OPERATIVO DIRECTO</th><td>490,6</td><td>88,5</td></tr></tbody></table></div>
+<p class="article-paragraph" data-bloque-id="b-63">Fuente: Elaboración propia.</p>
+<p class="article-paragraph" data-bloque-id="b-64">4.2.4 Comparación de eficiencia económica</p>
+<p class="article-paragraph" data-bloque-id="b-65">A partir de los resultados hallados en cuanto a los principales indicadores de eficiencia económica se destaca como la UEPA muestra ventajas en todos los indicadores de resultado absoluto: MB y resultado económico operativo directo (+454%), resultado financiero operativo (+398%), ingreso neto por hectárea (+283%). Los costos directos por hectárea se incrementan en un 145%. No obstante, la relación MB/Ingreso Neto de la UEPA (0,643) también es superior a la del SSB (0,444), indicando que la UEPA no sólo genera un mayor MB absoluto sino también una mejor conversión de ingresos en margen. La equivalencia productiva resulta en que 1 ha de UEPA produce el equivalente económico de 5,54 ha de SSB, lo que expresa la notable ventaja de la intensificación tecnológica en el contexto de precios de Enero 2026.</p>
+<p class="article-paragraph" data-bloque-id="b-66">Discusión</p>
+<p class="article-paragraph" data-bloque-id="b-67">Los resultados confirman y amplían la hipótesis del trabajo en el contexto de precios de Enero 2026. El diferencial de producción de carne por hectárea de 129% entre la UEPA y el SSB se traduce en una brecha de MB de 454%, significativamente superior a la brecha documentada en ejercicios previos con precios de 2024 (<a id="revista-cita-31-1" class="article-citation" href="#revista-ref-31" aria-label="Ir a la referencia 31" role="doc-biblioref">Torres Carbonell et al., 2024</a>). Este comportamiento indica que la actualización de precios, en un contexto de aumento relativo de los precios de la hacienda respecto a los costos de insumos en dólares (<a id="revista-cita-32-3" class="article-citation" href="#revista-ref-32" aria-label="Ir a la referencia 32" role="doc-biblioref">Vidal y Moares, 2025</a>), amplificó la ventaja del sistema más intensivo, que posee mayor exposición a precios de venta.</p>
+<p class="article-paragraph" data-bloque-id="b-68">La palanca principal de diferenciación sigue residiendo en la componente de invernada: la carga 6,6 veces superior y las GDP 62% mayores en la UEPA son consecuencia directa de la base forrajera diversificada y de mayor adaptación a las condiciones agroecológicas de sudoeste subhúmedo bonaerense. En términos de flujo de caja, el resultado financiero operativo directo de USD 761,1 ha⁻¹ para la UEPA implica que por cada dólar de insumo erogable invertido, el sistema genera USD 4,58 de retorno financiero, frente a USD 2,37 en el SSB. Este diferencial es especialmente relevante para la toma de decisiones de inversión en un contexto de acceso limitado al crédito.</p>
+<p class="article-paragraph" data-bloque-id="b-69">La ratio MB/Ingreso neto muestra que la UEPA retiene una mayor proporción de sus ingresos como margen económico, a diferencia de lo observado en análisis con precios de períodos anteriores donde los costos de invernada comprimían el margen relativo. Esto sugiere que, en el contexto de precios de Enero 2026, con precios de la hacienda más altos en dólares, el efecto precio supera al efecto costo en los sistemas de mayor intensificación.</p>
+<p class="article-paragraph" data-bloque-id="b-70">Desde el punto de vista de la extensión tecnológica, la equivalencia de 1 ha UEPA = 5,54 ha SSB tiene implicancias estratégicas contundentes para establecimientos con restricciones de superficie en el sudoeste bonaerense. La diversificación forrajera que incluye sainfoin, con sus beneficios documentados sobre GDP (<a id="revista-cita-21-2" class="article-citation" href="#revista-ref-21" aria-label="Ir a la referencia 21" role="doc-biblioref">Lagrange et al., 2021</a>) y reducción de metano entérico (<a id="revista-cita-9-1" class="article-citation" href="#revista-ref-9" aria-label="Ir a la referencia 9" role="doc-biblioref">Chung et al., 2013</a>), se consolida como una tecnología de alto impacto productivo y económico. En términos de robustez ante cambios de precios relativos, el análisis de sensibilidad de ±30% (Tabla 6) confirma que la superioridad económica de la UEPA se mantiene en todos los escenarios evaluados, en línea con la mayor estabilidad del retorno sobre el capital, documentada por <a id="revista-cita-24-2" class="article-citation" href="#revista-ref-24" aria-label="Ir a la referencia 24" role="doc-biblioref">Pacín y Oesterheld (2014)</a> para sistemas diversificados pampeanos y por <a id="revista-cita-2-3" class="article-citation" href="#revista-ref-2" aria-label="Ir a la referencia 2" role="doc-biblioref">Bell et al. (2021)</a> en sistemas mixtos australianos. Ante una caída del 30% en el precio de la hacienda, el MB de la UEPA (USD 212,5 ha⁻¹) supera en 9,1 veces al del SSB (USD 23,3 ha⁻¹). Un incremento del 30% en costos de insumos reduce el MB de la UEPA en un 10,2%, frente al 21,8% del SSB, evidenciando mayor resiliencia relativa del sistema intensivo ante shocks de costos, consistente con los efectos de dilución de costos fijos descriptos por <a id="revista-cita-4-3" class="article-citation" href="#revista-ref-4" aria-label="Ir a la referencia 4" role="doc-biblioref">Bilotto et al. (2021)</a> y con el comportamiento no lineal entre intensificación y margen señalado por <a id="revista-cita-26-3" class="article-citation" href="#revista-ref-26" aria-label="Ir a la referencia 26" role="doc-biblioref">Romanzini et al. (2020)</a>. Asimismo, Lopes et al., (2020) documentan que la incorporación de forrajes de alta calidad genera un efecto de dilución de costos de mantenimiento del rodeo que puede superar el efecto de compresión de márgenes. La diferencia de escala entre la UEPA (97,5 ha) y el SSB (2.100 ha) constituye una limitación del análisis. Las economías de escala en la adquisición de insumos y la gestión del riesgo financiero merecen ser exploradas en futuros trabajos, junto con la sensibilidad de los resultados a diferentes escenarios de precios relativos. </p>
+<p class="article-paragraph" data-bloque-id="b-71">6. Conclusiones</p>
+<p class="article-paragraph" data-bloque-id="b-72">1. La UEPA de la EEA INTA Bordenave demostró un desempeño superior al SSB en todos los indicadores productivos evaluados: a) producción de carne (+129%); b) carga animal total (+71%) y c) eficiencia de stock (+22%). La base forrajera diversificada, pasturas perennes C3 con alfalfa y sainfoin, pasturas perennes C4 y verdeos de dos estaciones, es el factor determinante, al sostener una carga de invernada 6,6 veces superior y GDP 62% mayores.</p>
+<p class="article-paragraph" data-bloque-id="b-73">2. El MB de la UEPA fue de USD 490,6 ha⁻¹, un 454% superior al SSB (USD 88,5 ha⁻¹). El ingreso neto por hectárea fue un 283% mayor con costos directos un 145% superiores, operando un fuerte mecanismo de dilución de costos fijos que amplifica la ventaja del sistema intensivo en el contexto de precios de Enero 2026.</p>
+<p class="article-paragraph" data-bloque-id="b-74">3. La relación MB/Ingreso neto fue superior en la UEPA en un 45%, indicando que en ésta se convierte una mayor proporción de sus ingresos en margen económico. El resultado financiero operativo directo fue un 398% mayor, reflejando una capacidad de generación de caja por unidad de superficie muy superior.</p>
+<p class="article-paragraph" data-bloque-id="b-75">4. La equivalencia productiva de 1 ha UEPA = 5,54 ha SSB tiene implicancias directas para la gestión de empresas con restricciones de superficie, constituyendo la intensificación tecnológica un mecanismo de expansión virtual de la base productiva regional del sudoeste bonaerense. Este aspecto es esencialmente relevante para las estrategias de la componente del INTA de Extensión y Transferencia al contar con modelos reales para la promoción y adopción de prácticas de manejo que permitan aumentar la eficiencia en el uso de los recursos disponibles, mejorar la productividad por unidad de superficie y fortalecer la competitividad económica de los sistemas ganaderos regionales, especialmente en contextos de alta variabilidad climática y restricciones estructurales propias del territorio.</p>
+<p class="article-paragraph" data-bloque-id="b-76">5. El análisis de sensibilidad ante variaciones de ±30% en los precios relativos confirma la robustez del diferencial económico. En todos los escenarios evaluados la UEPA mantiene un MB superior al del SSB, con mayor resiliencia relativa ante shocks de costos. La relación MB/Capital Invertido (0,433 en UEPA vs. 0,136 en SSB) cuantifica la viabilidad económico-financiera de la intensificación. En futuros trabajos se propone explorar la escalabilidad a establecimientos de mayor superficie, la evaluación del resultado neto sobre el capital total y la huella de carbono como externalidad ambiental del sistema.</p>
+<p class="article-paragraph" data-bloque-id="b-77">Agradecimientos</p>
+<p class="article-paragraph" data-bloque-id="b-78">Los autores agradecen al personal técnico y de campo de la EEA INTA Bordenave por la colaboración en la sistematización de los registros productivos de la UEPA.</p>
+      </section>
+      <section class="article-notes" id="article-notes"><ol></ol></section>
+      <section class="article-references" id="article-references" aria-labelledby="references-heading"><h2 id="references-heading">Referencias bibliográficas</h2><ol><li id="revista-ref-1">Asociación Argentina de Consorcios Regionales de Experimentación Agrícola (AACREA). (1990). Normas para medir los resultados económicos en las empresas agropecuarias. Buenos Aires: Ed. AACREA.</li><li id="revista-ref-2">Bell, L. W., Moore, A. D., &amp; Thomas, D. T. (2021). Diversified crop-livestock farms are risk-efficient in the face of price and production variability. Agricultural Systems, 189, 103050. https://doi.org/10.1016/j.agsy.2021.103050<a class="reference-backlink" href="#revista-cita-2-1" aria-label="Volver a la cita 1 de la referencia 2" role="doc-backlink"></a><a class="reference-backlink" href="#revista-cita-2-2" aria-label="Volver a la cita 2 de la referencia 2" role="doc-backlink"></a><a class="reference-backlink" href="#revista-cita-2-3" aria-label="Volver a la cita 3 de la referencia 2" role="doc-backlink"></a></li><li id="revista-ref-3">Bell, L. W., Moore, A. D., &amp; Thomas, D. T. (2018). Integrating diverse forage sources reduces feed gaps on mixed crop-livestock farms. Animal, 12(9), 1967–1980. https://doi.org/10.1017/S1751731117003196</li><li id="revista-ref-4">Bilotto, F., Vibart, R., Wall, A., &amp; Machado, C. (2021). Estimation of the inter-annual marginal value of additional feed and its replacement cost for beef cattle systems in the Flooding Pampas of Argentina. Agricultural Systems, 187, 103010.<a class="reference-backlink" href="#revista-cita-4-1" aria-label="Volver a la cita 1 de la referencia 4" role="doc-backlink"></a><a class="reference-backlink" href="#revista-cita-4-2" aria-label="Volver a la cita 2 de la referencia 4" role="doc-backlink"></a><a class="reference-backlink" href="#revista-cita-4-3" aria-label="Volver a la cita 3 de la referencia 4" role="doc-backlink"></a></li><li id="revista-ref-5">Bolletta, A. I. (2020). Enhancing the production and sustainability of pasture-fed beef using non-traditional legume forages. PhD Thesis, Utah State University.<a class="reference-backlink" href="#revista-cita-5-1" aria-label="Volver a la cita 1 de la referencia 5" role="doc-backlink"></a><a class="reference-backlink" href="#revista-cita-5-2" aria-label="Volver a la cita 2 de la referencia 5" role="doc-backlink"></a></li><li id="revista-ref-6">Bottaro, O. E., Rodríguez Jáuregui, H., &amp; Yardín, A. (2004). El comportamiento de los costos y la gestión de la empresa. Buenos Aires: Editorial La Ley.</li><li id="revista-ref-7">Castro-Monge, E. (2010). El estudio de casos como metodología de investigación. Revista Nacional de Administración, 1(2), 31–54.<a class="reference-backlink" href="#revista-cita-7-1" aria-label="Volver a la cita 1 de la referencia 7" role="doc-backlink"></a></li><li id="revista-ref-8">Christensen, K., Pitcher, R. L. &amp; Bolletta, A. I. (2024). Tannins in Perennial Legume and Forb Functional Forages. IGC Proceedings, 42.</li><li id="revista-ref-9">Chung, Y. H., McGeough E. J., Acharya S., McAllister T. A., McGinn S. M., Harstad O. M., &amp; Beauchemin K.A. (2013). Enteric methane emission, diet digestibility, and nitrogen excretion from beef heifers fed sainfoin or alfalfa. J. Anim. Sci. 91:4861–4874. doi:10.2527/jas.2013-6498<a class="reference-backlink" href="#revista-cita-9-1" aria-label="Volver a la cita 1 de la referencia 9" role="doc-backlink"></a></li><li id="revista-ref-10">Delevatti, L., Romanzini, E., Koscheck, J., Renesto, T., Ferrari, D., Barbero, A., Mulliniks, R., &amp; Reis, R. (2019). Forage management intensification and supplementation strategy. Animal Feed Science and Technology, 247, 74–82.<a class="reference-backlink" href="#revista-cita-10-1" aria-label="Volver a la cita 1 de la referencia 10" role="doc-backlink"></a></li><li id="revista-ref-11">Espósito, W. (1995). Introducción al estudio de la contabilidad de costos. En C. M. Giménez (Ed.), Costos para empresarios. Buenos Aires: Ediciones Macchi.<a class="reference-backlink" href="#revista-cita-11-1" aria-label="Volver a la cita 1 de la referencia 11" role="doc-backlink"></a><a class="reference-backlink" href="#revista-cita-11-2" aria-label="Volver a la cita 2 de la referencia 11" role="doc-backlink"></a></li><li id="revista-ref-12">Frank, R. G. (1995). Introducción al cálculo de costos agropecuarios. Buenos Aires: Editorial El Ateneo.<a class="reference-backlink" href="#revista-cita-12-1" aria-label="Volver a la cita 1 de la referencia 12" role="doc-backlink"></a><a class="reference-backlink" href="#revista-cita-12-2" aria-label="Volver a la cita 2 de la referencia 12" role="doc-backlink"></a><a class="reference-backlink" href="#revista-cita-12-3" aria-label="Volver a la cita 3 de la referencia 12" role="doc-backlink"></a></li><li id="revista-ref-13">Ghida Daza, C., et al. (2009). Indicadores económicos para la gestión de empresas agropecuarias. Bases metodológicas. Buenos Aires: INTA.<a class="reference-backlink" href="#revista-cita-13-1" aria-label="Volver a la cita 1 de la referencia 13" role="doc-backlink"></a><a class="reference-backlink" href="#revista-cita-13-2" aria-label="Volver a la cita 2 de la referencia 13" role="doc-backlink"></a></li><li id="revista-ref-14">González, M. C., &amp; Pagliettini, L. L. (2001). Los costos agrarios y sus aplicaciones. Buenos Aires: Facultad de Agronomía, UBA.<a class="reference-backlink" href="#revista-cita-14-1" aria-label="Volver a la cita 1 de la referencia 14" role="doc-backlink"></a><a class="reference-backlink" href="#revista-cita-14-2" aria-label="Volver a la cita 2 de la referencia 14" role="doc-backlink"></a><a class="reference-backlink" href="#revista-cita-14-3" aria-label="Volver a la cita 3 de la referencia 14" role="doc-backlink"></a></li><li id="revista-ref-15">Guevara Ballesteros, R. D. (2019). Enteric Methane and Nitrogen Emissions in Beef Cattle Grazing a Tannin-containing Legume Relative to Feedlot and Traditional Pasture-based Production Systems. Master&#39;s Thesis, Utah State University.<a class="reference-backlink" href="#revista-cita-15-1" aria-label="Volver a la cita 1 de la referencia 15" role="doc-backlink"></a></li><li id="revista-ref-16">Herrero, M., Thornton, P. K., (2010). Smart investments in sustainable food production: revisiting mixed crop-livestock systems. Science, 327(5967), 822–825.</li><li id="revista-ref-17">Herrero, M., Mason-D&#39;Croz, D.,. (2020). Livestock and sustainable food systems: Status, trends, and priority actions. One Earth, 3(5), 573–586.<a class="reference-backlink" href="#revista-cita-17-1" aria-label="Volver a la cita 1 de la referencia 17" role="doc-backlink"></a></li><li id="revista-ref-18">Kachergis, E., Derner, J., (2014). Increasing flexibility in rangeland management during drought. Ecosphere, 5(6), 1–14.</li><li id="revista-ref-19">Lagrange, S. P., &amp; Villalba, J. J. (2019). Tannin-containing legumes and forage diversity influence foraging behavior, diet digestibility, and nitrogen excretion by lambs. Journal of Animal Science, 97(9), 3994-4009. doi: 10.1093/jas/skz246<a class="reference-backlink" href="#revista-cita-19-1" aria-label="Volver a la cita 1 de la referencia 19" role="doc-backlink"></a></li><li id="revista-ref-20">Lagrange, S. P., Beauchemin, K. A., MacAdam, J. W., &amp; Villalba, J. J. (2020). Grazing diverse combinations of tanniferous and non-tanniferous legumes: implications for beef cattle performance and environmental impact. Science of The Total Environment, 746, 140788. https://doi.org/10.1016/j.scitotenv.2020.140788<a class="reference-backlink" href="#revista-cita-20-1" aria-label="Volver a la cita 1 de la referencia 20" role="doc-backlink"></a><a class="reference-backlink" href="#revista-cita-20-2" aria-label="Volver a la cita 2 de la referencia 20" role="doc-backlink"></a><a class="reference-backlink" href="#revista-cita-20-3" aria-label="Volver a la cita 3 de la referencia 20" role="doc-backlink"></a></li><li id="revista-ref-21">Lagrange, S. P., MacAdam, J. W., Stegelmeier, B., &amp; Villalba, J. J. (2021). Grazing diverse combinations of tanniferous and nontanniferous legumes. Journal of Animal Science, 99(11), skab291. https://doi.org/10.1093/jas/skab291<a class="reference-backlink" href="#revista-cita-21-1" aria-label="Volver a la cita 1 de la referencia 21" role="doc-backlink"></a><a class="reference-backlink" href="#revista-cita-21-2" aria-label="Volver a la cita 2 de la referencia 21" role="doc-backlink"></a></li><li id="revista-ref-22">Lopes, M. A., dos Santos, G., Lima, A. L. R., Carvalho, F. M., &amp; Cardoso, M. G. (2020). Assessment of production costs and revenue in a beef cattle production system in Brazil. Ciência e Agrotecnologia, 44, e023320.<a class="reference-backlink" href="#revista-cita-22-1" aria-label="Volver a la cita 1 de la referencia 22" role="doc-backlink"></a><a class="reference-backlink" href="#revista-cita-22-2" aria-label="Volver a la cita 2 de la referencia 22" role="doc-backlink"></a></li><li id="revista-ref-23">MacAdam, J. W., Villalba, J. J., Lagrange, S. P., Stewart, E., Hunt, S., Legako, J., Menchaca, M. A., &amp; Vieites, C. (2024). Ganadería bovina en Argentina: diagnóstico, perspectivas y desafíos. Revista Argentina de Producción Animal, 44(1), 1–18.<a class="reference-backlink" href="#revista-cita-23-1" aria-label="Volver a la cita 1 de la referencia 23" role="doc-backlink"></a><a class="reference-backlink" href="#revista-cita-23-2" aria-label="Volver a la cita 2 de la referencia 23" role="doc-backlink"></a></li><li id="revista-ref-24">Pacín, F., &amp; Oesterheld, M. (2014). In-farm diversity stabilizes return on capital in Argentine agro-ecosystems. Agricultural Systems, 124, 51–59.<a class="reference-backlink" href="#revista-cita-24-1" aria-label="Volver a la cita 1 de la referencia 24" role="doc-backlink"></a><a class="reference-backlink" href="#revista-cita-24-2" aria-label="Volver a la cita 2 de la referencia 24" role="doc-backlink"></a></li><li id="revista-ref-25">https://www.sciencedirect.com/science/article/abs/pii/S0308521X13001327</li><li id="revista-ref-26">Romanzini, E. P., Barbero, R. P., &amp; Reis, R. A. (2020). Economic evaluation from beef cattle production industry with intensification in Brazil&#39;s tropical pastures. Tropical Animal Health and Production, 52, 2659–2666.<a class="reference-backlink" href="#revista-cita-26-1" aria-label="Volver a la cita 1 de la referencia 26" role="doc-backlink"></a><a class="reference-backlink" href="#revista-cita-26-2" aria-label="Volver a la cita 2 de la referencia 26" role="doc-backlink"></a><a class="reference-backlink" href="#revista-cita-26-3" aria-label="Volver a la cita 3 de la referencia 26" role="doc-backlink"></a></li><li id="revista-ref-27">Schaub, S., Finger, R., et al. (2020). Plant diversity effects on forage quality, yield and revenues of semi-natural grasslands. Nature Communications, 11, 768.<a class="reference-backlink" href="#revista-cita-27-1" aria-label="Volver a la cita 1 de la referencia 27" role="doc-backlink"></a><a class="reference-backlink" href="#revista-cita-27-2" aria-label="Volver a la cita 2 de la referencia 27" role="doc-backlink"></a></li><li id="revista-ref-28">Scian, B., Labraga, J. C., Reimers, W., &amp; Frumento, O. (2006). Characteristics of large-scale atmospheric circulation related to extreme monthly rainfall anomalies in the Pampa Region. Theoretical and Applied Climatology, 85(1–2), 89–106.<a class="reference-backlink" href="#revista-cita-28-1" aria-label="Volver a la cita 1 de la referencia 28" role="doc-backlink"></a></li><li id="revista-ref-29">Soder, K. J., Rook, A. J., Sanderson, M. A., &amp; Goslee, S. C. (2007). Interaction of plant species diversity on grazing behavior and performance of livestock grazing temperate region pastures. Crop Science, 47(2), 416–425.<a class="reference-backlink" href="#revista-cita-29-1" aria-label="Volver a la cita 1 de la referencia 29" role="doc-backlink"></a></li><li id="revista-ref-30">Torres Carbonell, C., Chimeno, P., et al. (2022). Impacto de niveles crecientes de suplementación en la invernada de terneros. Revista Argentina de Economía Agraria, 23(1), 43–59.</li><li id="revista-ref-31">Torres Carbonell, C., Bolletta, A., Lagrange, S., Alonso, M., Lauric, A., &amp; De Leo, G. (2024). Estudio económico del modelo de la Unidad de Producción Ganadera de la EEA Bordenave. 54° Reunión Anual Asociación Argentina de Economía Agraria.<a class="reference-backlink" href="#revista-cita-31-1" aria-label="Volver a la cita 1 de la referencia 31" role="doc-backlink"></a></li><li id="revista-ref-32">Vidal, R., &amp; Moares, J. (2025). Resultados económicos ganaderos. Informe trimestral N°53. Secretaría de Bioeconomía, Ministerio de Economía de la República Argentina.<a class="reference-backlink" href="#revista-cita-32-1" aria-label="Volver a la cita 1 de la referencia 32" role="doc-backlink"></a><a class="reference-backlink" href="#revista-cita-32-2" aria-label="Volver a la cita 2 de la referencia 32" role="doc-backlink"></a><a class="reference-backlink" href="#revista-cita-32-3" aria-label="Volver a la cita 3 de la referencia 32" role="doc-backlink"></a></li><li id="revista-ref-33">Villalba, J. J., Beauchemin, K. A., Gregorini, P., &amp; MacAdam, J. W. (2019). Pasture chemoscapes and their ecological services. Translational Animal Science, 3(2), 829-841. doi: 10.1093/tas/txz003<a class="reference-backlink" href="#revista-cita-33-1" aria-label="Volver a la cita 1 de la referencia 33" role="doc-backlink"></a></li></ol></section>
+    </article>
+  </main>
+  <footer class="footer">
+    <div class="footer-inner">
+      <span>Revista científica</span>
+      <nav aria-label="Navegación del artículo">
+        <ul>
+          <li><a href="#main-content">Inicio del artículo</a></li>
+          <li><a href="#article-notes">Notas</a></li>
+          <li><a href="#article-references">Referencias</a></li>
+        </ul>
+      </nav>
+    </div>
+  </footer>
+</body>
+</html>

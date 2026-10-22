@@ -124,6 +124,7 @@ function makeMatch(
         ? `La cita coincide con más de una referencia y quedó sin enlazar: ${text}`
         : `No se encontró una referencia para la cita y quedó sin enlazar: ${text}`,
       blockIndex,
+      status: "pendiente",
     },
   };
 }
@@ -164,6 +165,7 @@ function citationMatches(
               code: "ambiguous-citation",
               message: `No se pudo identificar con seguridad el autor de la cita: ${trimmed}`,
               blockIndex,
+              status: "pendiente",
             },
           });
         }
@@ -308,6 +310,7 @@ export class CitationLinker {
       warnings.push({
         code: "uncited-reference",
         message: `La referencia no tiene citas detectadas en el texto: ${reference.raw}`,
+        status: "pendiente",
       });
     }
 

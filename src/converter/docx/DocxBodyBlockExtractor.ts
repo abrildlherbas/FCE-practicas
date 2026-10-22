@@ -38,6 +38,29 @@ function childElements(element: XmlElement): XmlElement[] {
   return Array.from(element.childNodes).filter(isElement);
 }
 
+function bodyContentElements(body: XmlElement): XmlElement[] {
+  const elements: XmlElement[] = [];
+  const visit = (children: XmlElement[]): void => {
+    for (const child of children) {
+      if (
+        child.namespaceURI === WORD_NS &&
+        child.localName === "sdt"
+      ) {
+        const content = childElements(child).find(
+          (element) =>
+            element.namespaceURI === WORD_NS &&
+            element.localName === "sdtContent"
+        );
+        if (content) visit(childElements(content));
+        continue;
+      }
+      elements.push(child);
+    }
+  };
+  visit(childElements(body));
+  return elements;
+}
+
 function descendants(
   element: XmlElement,
   localName: string
@@ -233,7 +256,7 @@ export class DocxBodyBlockExtractor {
       readImageRelationships(relationshipsXml);
     const blocksByBodyIndex = new Map<number, BodyBlock[]>();
     const warnings: ParseWarning[] = [];
-    const bodyChildren = childElements(body);
+    const bodyChildren = bodyContentElements(body);
     const assetsDirectory = path.join(
       path.dirname(sourcePath),
       `${path.parse(sourcePath).name}_assets`
@@ -263,6 +286,7 @@ export class DocxBodyBlockExtractor {
             message:
               "Se encontró un dibujo o imagen OOXML sin una relación de imagen reconocible.",
             blockIndex,
+            status: "pendiente",
           });
           continue;
         }
@@ -274,6 +298,7 @@ export class DocxBodyBlockExtractor {
               code: "unresolved-image-relationship",
               message: `No se pudo resolver la relación ${rId} de una imagen.`,
               blockIndex,
+              status: "pendiente",
             });
             continue;
           }
@@ -285,6 +310,7 @@ export class DocxBodyBlockExtractor {
               code: "missing-image-file",
               message: `No se encontró el archivo de imagen ${zipPath} dentro del DOCX.`,
               blockIndex,
+              status: "pendiente",
             });
             continue;
           }
@@ -315,6 +341,7 @@ export class DocxBodyBlockExtractor {
               code: "image-missing-alt",
               message: `La imagen ${rId} no tiene texto alternativo.`,
               blockIndex,
+              status: "pendiente",
             });
           }
         }
