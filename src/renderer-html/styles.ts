@@ -96,6 +96,20 @@ a:focus-visible {
 
 .article-affiliations {
   margin: 0.35rem 0 1.5rem;
+  padding-left: 1.25rem;
+}
+
+.article-affiliations li + li {
+  margin-top: 0.25rem;
+}
+
+.affiliation-marker {
+  font-weight: 700;
+}
+
+.article-orcid {
+  margin-left: 0.25rem;
+  font-size: 0.8em;
 }
 
 .article-abstract {

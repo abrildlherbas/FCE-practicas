@@ -32,7 +32,7 @@ describe("NoteDetector", () => {
         },
         {
           blockIndex: 4,
-          text: "Referencias",
+          text: "Referencias bibliográficas",
           sizeHalfPoints: "24",
           hasSuperscriptPrefix: false,
         },
@@ -66,18 +66,19 @@ describe("NoteDetector", () => {
     expect([...result.referenceBlockIndexes]).toEqual([5, 6]);
     expect(result.references).toEqual([
       {
+        id: "revista-ref-1",
         raw: "Smith, J. (2020). Un estudio. https://doi.org/10.1234/example",
         authors: ["Smith, J."],
         year: 2020,
         doi: "10.1234/example",
       },
-      { raw: "Entrada de referencia no reconocida" },
+      { id: "revista-ref-2", raw: "Entrada de referencia no reconocida" },
     ]);
     expect(result.warnings).toEqual([
       {
         code: "unclassified-reference",
         message:
-          "La entrada de referencias se conserva como texto, pero no se pudieron reconocer autor, año ni DOI.",
+          "La entrada de referencias se conserva como texto, pero no se pudieron reconocer autor, año ni DOI. Texto: Entrada de referencia no reconocida",
         blockIndex: 6,
       },
     ]);
@@ -167,7 +168,7 @@ describe("NoteDetector", () => {
       {
         code: "ambiguous-note-size",
         message:
-          "El párrafo tiene un posible marcador de nota, pero no se pudo confirmar que su tamaño sea menor al del cuerpo.",
+          "El párrafo tiene un posible marcador de nota, pero no se pudo confirmar que su tamaño sea menor al del cuerpo. Texto: [1] Posible nota",
         blockIndex: 1,
       },
     ]);

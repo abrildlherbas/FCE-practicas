@@ -1,4 +1,6 @@
 import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { fileURLToPath } from "node:url";
 import JSZip from "jszip";
 import { describe, expect, it } from "vitest";
@@ -10,6 +12,66 @@ const fixturePath = fileURLToPath(
 );
 
 describe("DocxParser", () => {
+  it("preserva los espacios de w:t con xml:space=\"preserve\"", async () => {
+    const zip = new JSZip();
+    zip.file(
+      "word/document.xml",
+      '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>Introducción</w:t></w:r></w:p><w:p><w:r><w:t xml:space="preserve">  texto </w:t><w:t>continuado</w:t></w:r></w:p></w:body></w:document>'
+    );
+
+    const article = await new DocxParser().parse(zip, "spaces.docx");
+    const contentParagraph = article.body[1];
+    if (!contentParagraph || !("runs" in contentParagraph)) {
+      throw new Error("No se encontró el párrafo de contenido.");
+    }
+    const bodyText = contentParagraph.runs
+      .filter((run) => run.type === "text")
+      .map((run) => run.text)
+      .join("");
+
+    expect(bodyText).toBe("  texto continuado");
+  });
+
+  it("convierte los elementos de control de runs a texto en orden", async () => {
+    const zip = new JSZip();
+    zip.file(
+      "word/document.xml",
+      '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>Introducción</w:t></w:r></w:p><w:p><w:r><w:t>A</w:t><w:tab/><w:t>B</w:t><w:br/><w:t>C</w:t><w:noBreakHyphen/><w:t>D</w:t><w:softHyphen/><w:t>E</w:t></w:r></w:p></w:body></w:document>'
+    );
+
+    const article = await new DocxParser().parse(zip, "controls.docx");
+    const contentParagraph = article.body[1];
+    if (!contentParagraph || !("runs" in contentParagraph)) {
+      throw new Error("No se encontró el párrafo de contenido.");
+    }
+    const bodyText = contentParagraph.runs
+      .filter((run) => run.type === "text")
+      .map((run) => run.text)
+      .join("");
+
+    expect(bodyText).toBe("A B\nC-DE");
+  });
+
+  it("preserva runs cuyo contenido es únicamente numérico", async () => {
+    const zip = new JSZip();
+    zip.file(
+      "word/document.xml",
+      '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>Introducción</w:t></w:r></w:p><w:p><w:r><w:t>14</w:t></w:r><w:r><w:t>/</w:t></w:r><w:r><w:t>03</w:t></w:r><w:r><w:t>/</w:t></w:r><w:r><w:t>2026</w:t></w:r></w:p></w:body></w:document>'
+    );
+
+    const article = await new DocxParser().parse(zip, "numeric-runs.docx");
+    const contentParagraph = article.body[1];
+    if (!contentParagraph || !("runs" in contentParagraph)) {
+      throw new Error("No se encontró el párrafo de contenido.");
+    }
+    const bodyText = contentParagraph.runs
+      .filter((run) => run.type === "text")
+      .map((run) => run.text)
+      .join("");
+
+    expect(bodyText).toBe("14/03/2026");
+  });
+
   it("parsea el DOCX de ejemplo y coincide con el snapshot JSON", async () => {
     const fixture = await fs.readFile(fixturePath);
     const zip = await JSZip.loadAsync(fixture);
@@ -17,10 +79,13 @@ describe("DocxParser", () => {
 
     expect(article.header).toMatchObject({
       title: "Título de ejemplo",
-      authors: ["Ana Pérez"],
-      affiliations: ["Instituto de Investigación"],
+      authors: [{ name: "Ana Pérez", affiliations: [] }],
+      affiliations: [
+        { id: "i", text: "Instituto de Investigación" },
+      ],
       abstract: "Un resumen del artículo de prueba.",
       keywords: ["economía", "producción"],
+      keywords_en: [],
       jel_codes: ["Q12", "Q18"],
       dates: {
         received: "14/03/2026",
@@ -38,6 +103,92 @@ describe("DocxParser", () => {
       )
     ).toBe(false);
     expect(article).toMatchSnapshot();
+  });
+
+  it("conserva los metadatos bilingües, ORCID y afiliaciones del artículo real", async () => {
+    const fixture = fileURLToPath(
+      new URL("./fixtures/Carbonel_Cielo.docx", import.meta.url)
+    );
+    const zip = await JSZip.loadAsync(await fs.readFile(fixture));
+    const temporaryDirectory = await fs.mkdtemp(
+      path.join(os.tmpdir(), "carbonel-header-")
+    );
+
+    try {
+      const article = await new DocxParser().parse(
+        zip,
+        path.join(temporaryDirectory, "Carbonel_Cielo.docx")
+      );
+
+      expect(article.header.title_en).toContain(
+        "Technological Intensification and Economic Efficiency"
+      );
+      expect(article.header.abstract_en).toContain(
+        "Differential technology adoption in livestock systems"
+      );
+      expect(article.header.keywords_en).toEqual([
+        "Beef cattle",
+        "technological intensification",
+        "productive and economic gap",
+      ]);
+      expect(article.header.authors).toContainEqual({
+        name: "Carlos Torres Carbonelli",
+        affiliations: ["iii"],
+        orcid: "0000-0002-2978-4326",
+      });
+      expect(article.header.affiliations.map(({ id }) => id)).toEqual([
+        "i",
+        "ii",
+        "iii",
+      ]);
+      expect(article.references).toHaveLength(33);
+      expect(
+        article.references.map(({ id }) => id)
+      ).toEqual(
+        Array.from({ length: 33 }, (_, index) => `revista-ref-${index + 1}`)
+      );
+      expect(article.references.at(-1)?.raw).toContain(
+        "Pasture chemoscapes and their ecological services"
+      );
+      const citations = article.body.flatMap((block) =>
+        "runs" in block
+          ? block.runs.filter((run) => run.type === "citation")
+          : []
+      );
+      expect(citations.length).toBeGreaterThan(0);
+      expect(
+        citations.every((citation) =>
+          article.references.some(
+            (reference) => reference.id === citation.referenceId
+          )
+        )
+      ).toBe(true);
+      expect(
+        new Set(citations.map((citation) => citation.citationId)).size
+      ).toBe(citations.length);
+      expect(
+        article.warnings.some((warning) => warning.code === "uncited-reference")
+      ).toBe(true);
+    } finally {
+      await fs.rm(temporaryDirectory, { recursive: true, force: true });
+    }
+  });
+
+  it("incluye el texto descartado de elementos no reconocidos en warnings", async () => {
+    const zip = new JSZip();
+    zip.file(
+      "word/document.xml",
+      '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>Introducción</w:t></w:r></w:p><w:sdt><w:sdtContent><w:p><w:r><w:t>Texto que no se pudo ubicar</w:t></w:r></w:p></w:sdtContent></w:sdt></w:body></w:document>'
+    );
+
+    const article = await new DocxParser().parse(zip, "unknown-content.docx");
+
+    expect(article.warnings).toContainEqual(
+      expect.objectContaining({
+        code: "unclassified-element",
+        message: expect.stringContaining("Texto que no se pudo ubicar"),
+      })
+    );
   });
 
   it("usa notas OOXML nativas y extrae referencias estructuradas", async () => {
@@ -60,13 +211,17 @@ describe("DocxParser", () => {
     expect(article.notes).toEqual([
       { id: 1, type: "footnote", text: "Nota nativa" },
     ]);
-    expect(article.body[1]?.runs).toContainEqual({
+    const noteParagraph = article.body[1];
+    expect(
+      noteParagraph && "runs" in noteParagraph ? noteParagraph.runs : []
+    ).toContainEqual({
       type: "noteRef",
       noteId: 1,
       noteType: "footnote",
     });
     expect(article.references).toEqual([
       {
+        id: "revista-ref-1",
         raw: "García, A. (2020). Estudio de ejemplo. DOI: 10.1234/demo.",
         authors: ["García, A."],
         year: 2020,
@@ -75,7 +230,7 @@ describe("DocxParser", () => {
     ]);
     expect(
       article.body.some((block) =>
-        block.runs.some(
+        "runs" in block && block.runs.some(
           (run) =>
             run.type === "text" &&
             run.text.includes("Estudio de ejemplo")

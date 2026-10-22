@@ -25,7 +25,7 @@ describe("HeaderExtractor", () => {
       },
       {
         blockIndex: 3,
-        text: "Ana Pérez",
+        text: "Ana Pérez i. https://orcid.org/0000-0000-0000-0001",
         styleId: null,
         sizeHalfPoints: "24",
       },
@@ -55,36 +55,54 @@ describe("HeaderExtractor", () => {
       },
       {
         blockIndex: 8,
-        text: "Código JEL: Q12; Q18",
+        text: "ABSTRACT",
         styleId: null,
         sizeHalfPoints: "24",
       },
       {
         blockIndex: 9,
+        text: "An English summary.",
+        styleId: null,
+        sizeHalfPoints: "24",
+      },
+      {
+        blockIndex: 10,
+        text: "Key words: economics, production",
+        styleId: null,
+        sizeHalfPoints: "24",
+      },
+      {
+        blockIndex: 11,
+        text: "Código JEL: Q12; Q18",
+        styleId: null,
+        sizeHalfPoints: "24",
+      },
+      {
+        blockIndex: 12,
         text: "Recibido: 14/03/2026",
         styleId: null,
         sizeHalfPoints: "22",
       },
       {
-        blockIndex: 10,
+        blockIndex: 13,
         text: "Aceptado: 22/05/2026",
         styleId: null,
         sizeHalfPoints: "22",
       },
       {
-        blockIndex: 11,
+        blockIndex: 14,
         text: "Publicado: 30/06/2026",
         styleId: null,
         sizeHalfPoints: "22",
       },
       {
-        blockIndex: 12,
+        blockIndex: 15,
         text: "Introducción",
         styleId: null,
         sizeHalfPoints: "32",
       },
       {
-        blockIndex: 13,
+        blockIndex: 16,
         text: "El cuerpo no se debe consumir.",
         styleId: null,
         sizeHalfPoints: "24",
@@ -93,10 +111,21 @@ describe("HeaderExtractor", () => {
 
     expect(result.header).toMatchObject({
       title: "Título del artículo",
-      authors: ["Ana Pérez"],
-      affiliations: ["Instituto de Investigación"],
+      title_en: "Article title in English",
+      authors: [
+        {
+          name: "Ana Pérez",
+          affiliations: ["i"],
+          orcid: "0000-0000-0000-0001",
+        },
+      ],
+      affiliations: [
+        { id: "i", text: "Instituto de Investigación" },
+      ],
       abstract: "Este es el resumen.",
+      abstract_en: "An English summary.",
       keywords: ["economía", "producción"],
+      keywords_en: ["economics", "production"],
       jel_codes: ["Q12", "Q18"],
       dates: {
         received: "14/03/2026",
@@ -106,7 +135,7 @@ describe("HeaderExtractor", () => {
       doi: "10.1000/example",
     });
     expect([...result.consumedBlockIndexes].sort((a, b) => a - b)).toEqual([
-      0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11,
+      0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14,
     ]);
     expect(result.warnings).toEqual([]);
   });
@@ -119,7 +148,9 @@ describe("HeaderExtractor", () => {
       authors: [],
       affiliations: [],
       abstract: "",
+      abstract_en: "",
       keywords: [],
+      keywords_en: [],
       jel_codes: [],
       dates: {
         received: "",

@@ -38,7 +38,7 @@ function resolvedSize(paragraph: NoteParagraph): number | null {
   return Number.isFinite(size) ? size : null;
 }
 
-function extractReference(raw: string): Reference {
+function extractReference(raw: string, id: string): Reference {
   const doiMatch = noteRules.doiPattern.exec(raw);
   const authorYearMatch = noteRules.authorYearPattern.exec(raw);
   const authorText = authorYearMatch?.[1].trim();
@@ -52,7 +52,7 @@ function extractReference(raw: string): Reference {
         .filter(Boolean)
     : undefined;
 
-  const reference: Reference = { raw };
+  const reference: Reference = { id, raw };
   if (authors?.length) reference.authors = authors;
   if (authorYearMatch && hasRecognizableAuthor) {
     const year = Number.parseInt(authorYearMatch[2], 10);
@@ -106,40 +106,23 @@ export class NoteDetector {
       referenceHeadingIndex < 0
         ? []
         : paragraphs.slice(referenceHeadingIndex + 1);
+    const references: Reference[] = [];
 
     for (const paragraph of referenceParagraphs) {
       const raw = normalizedText(paragraph.text);
       referenceBlockIndexes.add(paragraph.blockIndex);
       if (!raw) continue;
 
-      const reference = extractReference(raw);
+      const reference = extractReference(raw, `revista-ref-${references.length + 1}`);
+      references.push(reference);
       if (reference.authors === undefined && reference.doi === undefined) {
         warnings.push({
           code: "unclassified-reference",
           message:
-            "La entrada de referencias se conserva como texto, pero no se pudieron reconocer autor, año ni DOI.",
+            `La entrada de referencias se conserva como texto, pero no se pudieron reconocer autor, año ni DOI. Texto: ${raw}`,
           blockIndex: paragraph.blockIndex,
         });
       }
-    }
-
-    const references: Reference[] = [];
-
-    for (const paragraph of referenceParagraphs) {
-      const raw = normalizedText(paragraph.text);
-      if (!raw) continue;
-
-      if (/^https?:\/\//i.test(raw) && references.length > 0) {
-        references[references.length - 1].raw += ` ${raw}`;
-        const last = references[references.length - 1];
-        const doiMatch = noteRules.doiPattern.exec(last.raw);
-        if (doiMatch) {
-          last.doi = doiMatch[1].replace(/[.,;]+$/, "");
-        }
-        continue;
-      }
-
-      references.push(extractReference(raw));
     }
 
     if (nativeNotes.length === 0) {
@@ -181,7 +164,7 @@ export class NoteDetector {
               warnings.push({
                 code: "ambiguous-note-size",
                 message:
-                  "El párrafo tiene un posible marcador de nota, pero no se pudo confirmar que su tamaño sea menor al del cuerpo.",
+                  `El párrafo tiene un posible marcador de nota, pero no se pudo confirmar que su tamaño sea menor al del cuerpo. Texto: ${text}`,
                 blockIndex: paragraph.blockIndex,
               });
             }
@@ -218,7 +201,7 @@ export class NoteDetector {
             warnings.push({
               code: "ambiguous-note",
               message:
-                "El párrafo tiene texto en superíndice y tamaño menor al cuerpo, pero no se pudo identificar su marcador de nota.",
+                `El párrafo tiene texto en superíndice y tamaño menor al cuerpo, pero no se pudo identificar su marcador de nota. Texto: ${text}`,
               blockIndex: paragraph.blockIndex,
             });
           }

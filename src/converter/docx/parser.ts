@@ -22,6 +22,7 @@ import { HeaderExtractor } from "./HeaderExtractor";
 import { NoteDetector } from "./NoteDetector";
 import { StylesResolver } from "./StylesResolver";
 import { DocxBodyBlockExtractor } from "./DocxBodyBlockExtractor";
+import { CitationLinker } from "./CitationLinker";
 
 interface RawParagraph {
   xml: any;
@@ -100,6 +101,8 @@ export class DocxParser {
     attributeNamePrefix: "@_",
     textNodeName: "#text",
     preserveOrder: true,
+    trimValues: false,
+    parseTagValue: false,
   });
 
   async parse(zip: JSZip, sourcePath: string): Promise<Article> {
@@ -243,10 +246,15 @@ export class DocxParser {
         noteDetection.referenceHeadingBlockIndex,
         extractedBlocks.blocksByBodyIndex
       );
+    const citationLinking = new CitationLinker().link(
+      bodyBlocks,
+      noteDetection.references
+    );
+    warnings.push(...citationLinking.warnings);
 
     return {
       header: headerExtraction.header,
-      body: bodyBlocks,
+      body: citationLinking.body,
       references: noteDetection.references,
       warnings,
     };
@@ -346,9 +354,17 @@ export class DocxParser {
         name !== "w:sectPr" &&
         !recognizedBlockIndexes.has(blockIndex)
       ) {
+        const text = collectXmlNodes(child, "w:r")
+          .map((run) => this.extractRunText(run))
+          .join("") ||
+          findElements(child, "w:t")
+            .map((node) => extractText(node))
+            .join("");
         warnings.push({
           code: "unclassified-element",
-          message: `El elemento ${name} del cuerpo no se convirtió a un bloque del artículo.`,
+          message: text
+            ? `El elemento ${name} del cuerpo no se convirtió a un bloque del artículo. Texto: ${text}`
+            : `El elemento ${name} del cuerpo no se convirtió a un bloque del artículo.`,
           blockIndex,
         });
       }
@@ -373,7 +389,7 @@ export class DocxParser {
         warnings.push({
           code: "short-paragraph-cluster",
           message:
-            "Este párrafo breve está entre otros dos párrafos breves; podría ser un fragmento de texto.",
+            `Este párrafo breve está entre otros dos párrafos breves; podría ser un fragmento de texto. Texto: ${paragraphs[index].text}`,
           blockIndex: paragraphs[index].blockIndex,
         });
       }
@@ -390,7 +406,7 @@ export class DocxParser {
           warnings.push({
             code: "unresolved-run-size",
             message:
-              "No se pudo resolver el tamaño de fuente de este run.",
+              `No se pudo resolver el tamaño de fuente de este run. Texto: ${runText}`,
             blockIndex: paragraph.blockIndex,
           });
         }
@@ -602,22 +618,39 @@ export class DocxParser {
   }
 
   private extractRunText(run: any): string {
-    const textNodes =
-      findElements(run, "w:t");
+    const visit = (node: unknown): string => {
+      if (typeof node === "string") return node;
 
-    return textNodes
-      .map((node) => extractText(node))
-      .join("");
+      if (Array.isArray(node)) {
+        return node.map(visit).join("");
+      }
+
+      const record = asXmlRecord(node);
+      if (!record) return "";
+
+      const name = getXmlName(node);
+      if (name === "w:tab") return " ";
+      if (name === "w:br") return "\n";
+      if (name === "w:noBreakHyphen") return "-";
+      if (name === "w:softHyphen") return "";
+      if (name === "w:t") return visit(record[name]);
+
+      return Object.entries(record)
+        .filter(([key]) => key !== ":@")
+        .map(([, value]) => visit(value))
+        .join("");
+    };
+
+    return visit(run);
   }
 
   private extractParagraphText(
     paragraph: any
   ): string {
-    const texts =
-      findElements(paragraph, "w:t");
+    const runNodes = findElements(paragraph, "w:r");
 
-    return texts
-      .map((node) => extractText(node))
+    return runNodes
+      .map((node) => this.extractRunText(node))
       .join("");
   }
 

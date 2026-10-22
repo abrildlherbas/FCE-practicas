@@ -65,11 +65,18 @@ exports[`DocxParser > parsea el DOCX de ejemplo y coincide con el snapshot JSON 
   },
   "header": {
     "abstract": "Un resumen del artículo de prueba.",
+    "abstract_en": "",
     "affiliations": [
-      "Instituto de Investigación",
+      {
+        "id": "i",
+        "text": "Instituto de Investigación",
+      },
     ],
     "authors": [
-      "Ana Pérez",
+      {
+        "affiliations": [],
+        "name": "Ana Pérez",
+      },
     ],
     "dates": {
       "accepted": "22/05/2026",
@@ -84,6 +91,7 @@ exports[`DocxParser > parsea el DOCX de ejemplo y coincide con el snapshot JSON 
       "economía",
       "producción",
     ],
+    "keywords_en": [],
     "title": "Título de ejemplo",
   },
   "notes": [],
@@ -92,12 +100,12 @@ exports[`DocxParser > parsea el DOCX de ejemplo y coincide con el snapshot JSON 
     {
       "blockIndex": 7,
       "code": "short-paragraph-cluster",
-      "message": "Este párrafo breve está entre otros dos párrafos breves; podría ser un fragmento de texto.",
+      "message": "Este párrafo breve está entre otros dos párrafos breves; podría ser un fragmento de texto. Texto: Recibido: 14/03/2026",
     },
     {
       "blockIndex": 13,
       "code": "short-paragraph-cluster",
-      "message": "Este párrafo breve está entre otros dos párrafos breves; podría ser un fragmento de texto.",
+      "message": "Este párrafo breve está entre otros dos párrafos breves; podría ser un fragmento de texto. Texto: y",
     },
   ],
 }

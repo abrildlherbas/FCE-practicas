@@ -44,8 +44,70 @@ function splitList(value: string): string[] {
     .filter(Boolean);
 }
 
+function appendUnique(target: string[], values: string[]): void {
+  for (const value of values) {
+    if (!target.includes(value)) target.push(value);
+  }
+}
+
 function normalizeText(value: string): string {
   return value.replace(/\s+/g, " ").trim();
+}
+
+function parseAffiliation(
+  text: string,
+  fallbackId: string
+): { id: string; text: string } | null {
+  const markerMatch = text.match(
+    /^\s*\[?([ivxlcdm]+)\]?(?:\s+|(?=[A-Z]))(.+)/
+  ) ?? text.match(
+    /^\s*\[?([IVXLCDM]+)\]?\s+(.+)/
+  );
+  if (markerMatch) {
+    return {
+      id: markerMatch[1].toLowerCase(),
+      text: normalizeText(markerMatch[2]),
+    };
+  }
+
+  const labeledMatch = text.match(
+    /^(?:afiliaci[oó]n|affiliation)\s*:\s*(.+)$/i
+  );
+  if (labeledMatch) {
+    return { id: fallbackId, text: normalizeText(labeledMatch[1]) };
+  }
+
+  return null;
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function parseAuthor(
+  rawName: string,
+  affiliationIds: Set<string>,
+  orcid?: string
+): Article["header"]["authors"][number] {
+  let name = normalizeText(rawName).replace(/[,.;\s]+$/, "");
+  const affiliationId = [...affiliationIds]
+    .sort((left, right) => right.length - left.length)
+    .find((id) =>
+      new RegExp(`[\\s,.;]*${escapeRegExp(id)}$`, "i").test(name)
+    );
+
+  if (affiliationId) {
+    name = name.replace(
+      new RegExp(`[\\s,.;]*${escapeRegExp(affiliationId)}$`, "i"),
+      ""
+    );
+  }
+
+  return {
+    name,
+    affiliations: affiliationId ? [affiliationId] : [],
+    ...(orcid ? { orcid } : {}),
+  };
 }
 
 function isBodyHeading(text: string): boolean {
@@ -86,6 +148,7 @@ export class HeaderExtractor {
       affiliations: [],
       abstract: "",
       keywords: [],
+      keywords_en: [],
       jel_codes: [],
       dates: {
         received: "",
@@ -96,12 +159,25 @@ export class HeaderExtractor {
     const consumedBlockIndexes = new Set<number>();
     const warnings: ParseWarning[] = [];
     const candidates = paragraphs.slice(0, headerRules.maxHeaderBlocks);
+    const affiliationIds = new Set<string>();
+    let fallbackAffiliationIndex = 1;
+    for (const paragraph of candidates) {
+      const affiliation = parseAffiliation(
+        normalizeText(paragraph.text),
+        `affiliation-${fallbackAffiliationIndex}`
+      );
+      if (affiliation) {
+        affiliationIds.add(affiliation.id);
+        fallbackAffiliationIndex++;
+      }
+    }
     const titleIndex = this.findTitleIndex(candidates);
 
     if (titleIndex >= 0) {
       header.title = normalizeText(candidates[titleIndex].text);
       consumedBlockIndexes.add(candidates[titleIndex].blockIndex);
 
+      let capturedEnglishTitle = false;
       for (let index = titleIndex + 1; index < candidates.length; index++) {
         const paragraph = candidates[index];
         const size = sizeValue(paragraph.sizeHalfPoints);
@@ -110,6 +186,14 @@ export class HeaderExtractor {
           size >= headerRules.titleMinimumSizeHalfPoints &&
           !isMetadata(paragraph.text)
         ) {
+          if (!capturedEnglishTitle) {
+            header.title_en = normalizeText(paragraph.text);
+            capturedEnglishTitle = true;
+          } else {
+            header.title_en = normalizeText(
+              `${header.title_en} ${paragraph.text}`
+            );
+          }
           consumedBlockIndexes.add(paragraph.blockIndex);
           continue;
         }
@@ -117,10 +201,12 @@ export class HeaderExtractor {
       }
     }
 
-    let abstractStarted = false;
-    let captureAbstract = false;
+    let abstractLanguage: "es" | "en" | null = null;
     let authorCollectionStarted = titleIndex >= 0;
-    const abstractParagraphs: string[] = [];
+    const abstractParagraphs: Record<"es" | "en", string[]> = {
+      es: [],
+      en: [],
+    };
 
     for (const paragraph of candidates) {
       if (consumedBlockIndexes.has(paragraph.blockIndex)) {
@@ -135,11 +221,10 @@ export class HeaderExtractor {
         headerRules.abstractPatterns
       );
       if (abstractMatch) {
-        abstractStarted = true;
-        captureAbstract = abstractParagraphs.length === 0;
+        abstractLanguage = /^resumen\b/i.test(text) ? "es" : "en";
         consumedBlockIndexes.add(paragraph.blockIndex);
-        if (captureAbstract && abstractMatch[1]) {
-          abstractParagraphs.push(abstractMatch[1]);
+        if (abstractMatch[1]) {
+          abstractParagraphs[abstractLanguage].push(abstractMatch[1]);
         }
         continue;
       }
@@ -149,12 +234,13 @@ export class HeaderExtractor {
         headerRules.keywordPatterns
       );
       if (keywordMatch) {
-        if (header.keywords.length === 0) {
-          header.keywords = splitList(keywordMatch[1]);
+        if (/^(?:key\s*words|keywords)\b/i.test(text)) {
+          appendUnique(header.keywords_en, splitList(keywordMatch[1]));
+        } else {
+          appendUnique(header.keywords, splitList(keywordMatch[1]));
         }
         consumedBlockIndexes.add(paragraph.blockIndex);
-        abstractStarted = false;
-        captureAbstract = false;
+        abstractLanguage = null;
         continue;
       }
 
@@ -164,17 +250,30 @@ export class HeaderExtractor {
           header.jel_codes = splitList(jelMatch[1]);
         }
         consumedBlockIndexes.add(paragraph.blockIndex);
-        abstractStarted = false;
-        captureAbstract = false;
+        abstractLanguage = null;
         continue;
       }
 
-      const affiliationMatch = matchPatterns(
+      const affiliation = parseAffiliation(
         text,
-        headerRules.affiliationPatterns
+        `affiliation-${header.affiliations.length + 1}`
       );
-      if (affiliationMatch) {
-        header.affiliations.push(normalizeText(affiliationMatch[1]));
+      if (
+        affiliation &&
+        matchPatterns(text, headerRules.affiliationPatterns)
+      ) {
+        if (!header.affiliations.some((item) => item.id === affiliation.id)) {
+          header.affiliations.push(affiliation);
+        } else {
+          const existing = header.affiliations.find(
+            (item) => item.id === affiliation.id
+          );
+          if (existing && !existing.text.includes(affiliation.text)) {
+            existing.text = normalizeText(
+              `${existing.text} ${affiliation.text}`
+            );
+          }
+        }
         consumedBlockIndexes.add(paragraph.blockIndex);
         authorCollectionStarted = false;
         continue;
@@ -182,7 +281,11 @@ export class HeaderExtractor {
 
       const authorMatch = matchPatterns(text, headerRules.authorPatterns);
       if (authorMatch) {
-        header.authors.push(...splitList(authorMatch[1]));
+        header.authors.push(
+          ...splitList(authorMatch[1]).map((name) =>
+            parseAuthor(name, affiliationIds)
+          )
+        );
         consumedBlockIndexes.add(paragraph.blockIndex);
         continue;
       }
@@ -194,8 +297,7 @@ export class HeaderExtractor {
       if (receivedMatch) {
         header.dates.received = normalizeText(receivedMatch[1]);
         consumedBlockIndexes.add(paragraph.blockIndex);
-        abstractStarted = false;
-        captureAbstract = false;
+        abstractLanguage = null;
         continue;
       }
 
@@ -206,8 +308,7 @@ export class HeaderExtractor {
       if (acceptedMatch) {
         header.dates.accepted = normalizeText(acceptedMatch[1]);
         consumedBlockIndexes.add(paragraph.blockIndex);
-        abstractStarted = false;
-        captureAbstract = false;
+        abstractLanguage = null;
         continue;
       }
 
@@ -218,8 +319,7 @@ export class HeaderExtractor {
       if (publishedMatch) {
         header.dates.published = normalizeText(publishedMatch[1]);
         consumedBlockIndexes.add(paragraph.blockIndex);
-        abstractStarted = false;
-        captureAbstract = false;
+        abstractLanguage = null;
         continue;
       }
 
@@ -243,11 +343,11 @@ export class HeaderExtractor {
       const orcidMatch = headerRules.orcidPattern.exec(text);
       if (orcidMatch) {
         header.orcid ??= orcidMatch[1];
-        const authorText = normalizeText(
-          text.slice(0, orcidMatch.index).replace(/[,.;\s]+$/, "")
-        );
+        const authorText = text.slice(0, orcidMatch.index);
         if (authorText && authorCollectionStarted) {
-          header.authors.push(authorText);
+          header.authors.push(
+            parseAuthor(authorText, affiliationIds, orcidMatch[1])
+          );
         }
         consumedBlockIndexes.add(paragraph.blockIndex);
         continue;
@@ -257,8 +357,8 @@ export class HeaderExtractor {
         break;
       }
 
-      if (abstractStarted) {
-        if (captureAbstract) abstractParagraphs.push(text);
+      if (abstractLanguage) {
+        abstractParagraphs[abstractLanguage].push(text);
         consumedBlockIndexes.add(paragraph.blockIndex);
         continue;
       }
@@ -272,19 +372,20 @@ export class HeaderExtractor {
         !headerRules.orcidPattern.test(text) &&
         text.length <= 180
       ) {
-        header.authors.push(text.replace(/[,.;\s]+$/, ""));
+        header.authors.push(parseAuthor(text, affiliationIds));
         consumedBlockIndexes.add(paragraph.blockIndex);
       }
     }
 
-    header.abstract = normalizeText(abstractParagraphs.join(" "));
+    header.abstract = normalizeText(abstractParagraphs.es.join(" "));
+    header.abstract_en = normalizeText(abstractParagraphs.en.join(" "));
 
     const values: Record<string, boolean> = {
-      title: Boolean(header.title),
+      title: Boolean(header.title || header.title_en),
       authors: header.authors.length > 0,
       affiliations: header.affiliations.length > 0,
-      abstract: Boolean(header.abstract),
-      keywords: header.keywords.length > 0,
+      abstract: Boolean(header.abstract || header.abstract_en),
+      keywords: header.keywords.length > 0 || header.keywords_en.length > 0,
       jel_codes: header.jel_codes.length > 0,
       dates: Object.values(header.dates).some(Boolean),
     };

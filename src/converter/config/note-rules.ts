@@ -1,6 +1,6 @@
 export const noteRules = {
   referenceHeadingPatterns: [
-    /^(?:\d+(?:\.\d+)*\.?\s*)?(?:referencias?|bibliograf[ií]a|references|bibliography)\s*:?\s*$/i,
+    /^(?:\d+(?:\.\d+)*\.?\s*)?(?:referencias?(?:\s+bibliogr[aá]ficas?)?|bibliograf[ií]a|references|bibliography)\s*:?\s*$/i,
   ],
   noteStartPatterns: [
     /^\s*\[\d{1,3}\]\s*/,

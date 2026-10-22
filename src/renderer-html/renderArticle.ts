@@ -35,6 +35,19 @@ function renderRuns(
 ): string {
   return runs
     .map((run) => {
+      if (run.type === "citation") {
+        let content = escapeHtml(run.text);
+        if (run.italic) content = `<em>${content}</em>`;
+        if (run.bold) content = `<strong>${content}</strong>`;
+        const referenceNumber =
+          run.referenceId.match(/(\d+)$/)?.[1] ?? "";
+        return `<a id="${escapeHtml(
+          run.citationId
+        )}" class="article-citation" href="#${escapeHtml(
+          run.referenceId
+        )}" aria-label="Ir a la referencia ${referenceNumber}" role="doc-biblioref">${content}</a>`;
+      }
+
       if (run.type === "noteRef") {
         const key = noteKey(run.noteType, run.noteId);
         const note = noteMap.get(key);
@@ -174,25 +187,18 @@ function renderDates(article: Article): string {
 
 function renderMetadata(article: Article): string {
   const entries: string[] = [];
-  if (article.header.keywords.length) {
-    entries.push(
-      `<p class="article-keywords"><strong>Palabras clave:</strong> ${article.header.keywords
-        .map(escapeHtml)
-        .join("; ")}</p>`
-    );
-  }
   if (article.header.jel_codes.length) {
     entries.push(
-      `<p class="article-jel"><strong>Códigos JEL:</strong> ${article.header.jel_codes
+      `<p class="article-jel"><strong>Código JEL:</strong> ${article.header.jel_codes
         .map(escapeHtml)
         .join(", ")}</p>`
     );
   }
   if (article.header.doi) {
     entries.push(
-      `<p class="article-identifiers"><strong>DOI:</strong> ${escapeHtml(
+      `<p class="article-identifiers"><strong>DOI:</strong> <a href="https://doi.org/${escapeHtml(
         article.header.doi
-      )}</p>`
+      )}">https://doi.org/${escapeHtml(article.header.doi)}</a></p>`
     );
   }
   if (article.header.orcid) {
@@ -204,6 +210,90 @@ function renderMetadata(article: Article): string {
   }
   if (!entries.length) return "";
   return `<div class="article-metadata">${entries.join("")}</div>`;
+}
+
+function renderAuthors(article: Article): string {
+  if (!article.header.authors.length) return "";
+
+  const authors = article.header.authors
+    .map((author) => {
+      const affiliations = author.affiliations
+        .map(
+          (id) =>
+            `<sup><a href="#affiliation-${escapeHtml(
+              id
+            )}" aria-label="Afiliación ${escapeHtml(id)}">${escapeHtml(
+              id
+            )}</a></sup>`
+        )
+        .join("");
+      const orcid = author.orcid
+        ? ` <a class="article-orcid" href="https://orcid.org/${escapeHtml(
+            author.orcid
+          )}" rel="noopener noreferrer" aria-label="ORCID de ${escapeHtml(
+            author.name
+          )}">https://orcid.org/${escapeHtml(author.orcid)}</a>`
+        : "";
+      return `<span class="article-author">${escapeHtml(
+        author.name
+      )}${affiliations}${orcid}</span>`;
+    })
+    .join("; ");
+
+  return `<p class="article-byline">${authors}</p>`;
+}
+
+function renderAffiliations(article: Article): string {
+  if (!article.header.affiliations.length) return "";
+
+  return `<ul class="article-affiliations">${article.header.affiliations
+    .map(
+      (affiliation) =>
+        `<li id="affiliation-${escapeHtml(
+          affiliation.id
+        )}"><span class="affiliation-marker">${escapeHtml(
+          affiliation.id
+        )}</span> ${escapeHtml(affiliation.text)}</li>`
+    )
+    .join("")}</ul>`;
+}
+
+function renderAbstracts(article: Article): string {
+  const abstracts: string[] = [];
+  if (article.header.abstract?.trim()) {
+    abstracts.push(
+      `<section class="article-abstract" lang="es" aria-labelledby="abstract-heading"><h2 id="abstract-heading">Resumen</h2><p>${escapeHtml(
+        article.header.abstract
+      )}</p></section>`
+    );
+  }
+  if (article.header.abstract_en?.trim()) {
+    abstracts.push(
+      `<section class="article-abstract" lang="en" aria-labelledby="abstract-en-heading"><h2 id="abstract-en-heading">Abstract</h2><p>${escapeHtml(
+        article.header.abstract_en
+      )}</p></section>`
+    );
+  }
+  return abstracts.join("");
+}
+
+function renderKeywords(article: Article): string {
+  const entries: string[] = [];
+  if (article.header.keywords.length) {
+    entries.push(
+      `<p class="article-keywords" lang="es"><strong>Palabras clave:</strong> ${article.header.keywords
+        .map(escapeHtml)
+        .join("; ")}</p>`
+    );
+  }
+  if (article.header.keywords_en?.length) {
+    entries.push(
+      `<p class="article-keywords" lang="en"><strong>Key words:</strong> ${article.header.keywords_en
+        .map(escapeHtml)
+        .join("; ")}</p>`
+    );
+  }
+  return entries.join("");
 }
 
 function renderNotes(
@@ -236,11 +326,45 @@ function renderNotes(
   return `<section class="article-notes" id="article-notes" aria-labelledby="notes-heading"><h2 id="notes-heading">Notas</h2><ol>${items}</ol></section>`;
 }
 
-function renderReferences(article: Article): string {
-  return `<section class="article-references" id="article-references" aria-labelledby="references-heading"><h2 id="references-heading">Referencias</h2><ol>${article.references
+function citationBacklinks(article: Article): Map<string, string[]> {
+  const backlinks = new Map<string, string[]>();
+  for (const block of article.body) {
+    if (!("runs" in block)) continue;
+    for (const run of block.runs) {
+      if (run.type !== "citation") continue;
+      const references = backlinks.get(run.referenceId) ?? [];
+      references.push(run.citationId);
+      backlinks.set(run.referenceId, references);
+    }
+  }
+  return backlinks;
+}
+
+function renderReferences(
+  article: Article,
+  backlinks: Map<string, string[]>
+): string {
+  return `<section class="article-references" id="article-references" aria-labelledby="references-heading"><h2 id="references-heading">Referencias bibliográficas</h2><ol>${article.references
     .map(
-      (reference) =>
-        `<li>${escapeHtml(reference.raw)}</li>`
+      (reference, index) => {
+        const links = (backlinks.get(reference.id) ?? [])
+          .map(
+            (citationId, citationIndex) =>
+              `<a href="#${escapeHtml(
+                citationId
+              )}" aria-label="Volver a la cita ${citationIndex + 1} de la referencia ${
+                index + 1
+              }" role="doc-backlink">↩</a>`
+          )
+          .join(" ");
+        return `<li id="${escapeHtml(reference.id)}">${escapeHtml(
+          reference.raw
+        )}${
+          links
+            ? ` <span class="reference-backlinks">${links}</span>`
+            : ""
+        }</li>`;
+      }
     )
     .join("")}</ol></section>`;
 }
@@ -254,19 +378,9 @@ export function renderArticle(article: Article): string {
     ])
   );
   const noteReferences = new Map<string, NoteReference[]>();
-  const authors = article.header.authors
-    .map(escapeHtml)
-    .join("; ");
-  const affiliations = article.header.affiliations
-    .map(escapeHtml)
-    .join(" · ");
-  const abstract = article.header.abstract
-    ? `<section class="article-abstract" aria-labelledby="abstract-heading"><h2 id="abstract-heading">Resumen</h2><p>${escapeHtml(
-        article.header.abstract
-      )}</p></section>`
-    : "";
+  const referenceBacklinks = citationBacklinks(article);
   const titleTranslation = article.header.title_en
-    ? `<p class="article-title-translation">${escapeHtml(
+    ? `<p class="article-title-translation" lang="en">${escapeHtml(
         article.header.title_en
       )}</p>`
     : "";
@@ -287,29 +401,24 @@ export function renderArticle(article: Article): string {
   <main id="main-content">
     <article class="article-content" aria-labelledby="article-title">
       <header class="article-header">
-        <h1 class="article-heading" id="article-title">${escapeHtml(
-          title
-        )}</h1>
-        ${titleTranslation}
-        ${
-          authors
-            ? `<p class="article-byline">${authors}</p>`
-            : ""
-        }
-        ${
-          affiliations
-            ? `<p class="article-affiliations">${affiliations}</p>`
-            : ""
-        }
-        ${renderDates(article)}
-        ${abstract}
-        ${renderMetadata(article)}
+        <section class="article-data" aria-label="Datos del artículo">
+          <h1 class="article-heading" id="article-title">${escapeHtml(
+            title
+          )}</h1>
+          ${titleTranslation}
+          ${renderAuthors(article)}
+          ${renderAffiliations(article)}
+          ${renderDates(article)}
+          ${renderAbstracts(article)}
+          ${renderKeywords(article)}
+          ${renderMetadata(article)}
+        </section>
       </header>
       <section class="article-body" aria-label="Texto del artículo">
         ${body}
       </section>
       ${renderNotes(article.notes, noteReferences)}
-      ${renderReferences(article)}
+      ${renderReferences(article, referenceBacklinks)}
     </article>
   </main>
   <footer class="journal-footer">

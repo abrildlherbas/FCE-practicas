@@ -18,10 +18,18 @@ function createArticle(): Article {
     header: {
       title: "Un <artículo> sobre & datos",
       title_en: "A scientific article",
-      authors: ["Ana Pérez"],
-      affiliations: ["Instituto de Estudios"],
+      authors: [
+        {
+          name: "Ana Pérez",
+          affiliations: ["i"],
+          orcid: "0000-0000-0000-0001",
+        },
+      ],
+      affiliations: [{ id: "i", text: "Instituto de Estudios" }],
       abstract: "Resumen con contenido importante.",
+      abstract_en: "An important abstract.",
       keywords: ["economía", "datos"],
+      keywords_en: ["economics", "data"],
       jel_codes: ["Q12"],
       doi: "10.1234/ejemplo",
       dates: {
@@ -40,6 +48,13 @@ function createArticle(): Article {
         runs: [
           { type: "text", text: "Una afirmación" },
           { type: "noteRef", noteId: 3, noteType: "footnote" },
+          { type: "text", text: " y una cita " },
+          {
+            type: "citation",
+            text: "Pérez, 2024",
+            referenceId: "revista-ref-1",
+            citationId: "revista-cita-1-1",
+          },
           { type: "text", text: " con énfasis", italic: true },
         ],
       },
@@ -73,6 +88,7 @@ function createArticle(): Article {
     ],
     references: [
       {
+        id: "revista-ref-1",
         raw: "Pérez, A. (2024). Referencia de prueba.",
         authors: ["Pérez, A."],
         year: 2024,
@@ -109,6 +125,9 @@ describe("renderArticle", () => {
     const html = renderArticle(createArticle());
     const document = parseHtml(html);
     expect(html).toMatch(/^<!doctype html>/i);
+    expect(html.indexOf('class="article-data"')).toBeLessThan(
+      html.indexOf('class="article-body"')
+    );
     const headings = elements(document, "h1");
 
     expect(elements(document, "header")).toHaveLength(2);
@@ -118,6 +137,33 @@ describe("renderArticle", () => {
     expect(elements(document, "nav")).toHaveLength(1);
     expect(headings).toHaveLength(1);
     expect(headings[0].textContent).toBe("Un <artículo> sobre & datos");
+    expect(
+      document.getElementsByTagName("header")[1].textContent
+    ).toContain("A scientific article");
+    const articleData = elements(document, "section").find(
+      (element) => element.getAttribute("class") === "article-data"
+    );
+    expect(articleData?.textContent).toContain("An important abstract.");
+    expect(articleData?.textContent).toContain("Key words: economics; data");
+    expect(
+      elements(document, "a").some(
+        (anchor) => anchor.getAttribute("href") === "#affiliation-i"
+      )
+    ).toBe(true);
+    expect(
+      elements(document, "a").some(
+        (anchor) =>
+          anchor.getAttribute("href") ===
+          "https://orcid.org/0000-0000-0000-0001"
+      )
+    ).toBe(true);
+    expect(
+      elements(document, "a").some(
+        (anchor) =>
+          anchor.getAttribute("href") ===
+          "https://doi.org/10.1234/ejemplo"
+      )
+    ).toBe(true);
     expect(elements(document, "title")[0].textContent).toBe(
       "Un <artículo> sobre & datos"
     );
@@ -161,6 +207,21 @@ describe("renderArticle", () => {
     );
     expect(backlink.getAttribute("role")).toBe("doc-backlink");
     expect(note.textContent).toContain("Nota de explicación.");
+  });
+
+  it("enlaza cada cita con su referencia y genera el enlace de vuelta", () => {
+    const document = parseHtml(renderArticle(createArticle()));
+    const citation = byId(document, "revista-cita-1-1");
+    const reference = byId(document, "revista-ref-1");
+    const backlink = reference.getElementsByTagName("a")[0];
+
+    expect(citation.getAttribute("href")).toBe("#revista-ref-1");
+    expect(citation.getAttribute("role")).toBe("doc-biblioref");
+    expect(reference.textContent).toContain(
+      "Pérez, A. (2024). Referencia de prueba."
+    );
+    expect(backlink.getAttribute("href")).toBe("#revista-cita-1-1");
+    expect(backlink.getAttribute("role")).toBe("doc-backlink");
   });
 
   it("renderiza tablas caption/th scope e imágenes con alt obligatorio", () => {
