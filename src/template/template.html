@@ -7,43 +7,19 @@
   <style>{{revista_css}}</style>
 </head>
 <body>
-  <header
-    class="revista-header"
-    data-obc-id="{{obc_id}}"
-    data-revista-id="{{revista_id}}"
-    data-articulo-id="{{articulo_id}}"
-  >
-    <div class="revista-columna revista-header-contenido">
-      <div
-        class="revista-logo"
-        role="img"
-        aria-label="Logo de {{nombre_revista}}"
-      ></div>
-      <div class="revista-identificacion">
-        <p class="revista-nombre">{{nombre_revista}}</p>
-        <p class="revista-institucion">{{institucion}}</p>
-        <p class="revista-edicion">{{anio}} / {{numero}} / {{volumen}}</p>
-        <nav class="revista-identidad" aria-label="Identificación de la revista">
-          <ul>
-            <li>ISSN: {{issn}}</li>
-            <li>eISSN: {{eissn}}</li>
-            <li>
-              DOI:
-              <a href="https://doi.org/{{doi}}">https://doi.org/{{doi}}</a>
-            </li>
-          </ul>
-        </nav>
-      </div>
-    </div>
+  <header class="header" data-obc-id="{{obc_id}}" data-revista-id="{{revista_id}}" data-articulo-id="{{articulo_id}}">
+    <div class="info"><a href="{{revista.url}}"><h1>{{revista.nombre}}</h1></a></div>
+    <br>
+    <div class="info"><h2><strong>{{revista.institucion}}</strong></h2></div>
+    <div class="info"><p>Año: {{anio}} Nro.: {{numero}} Vol.: {{volumen}}</p></div>
+    <nav class="identidad">
+      ISSN: {{issn}} &nbsp; eISSN: {{eissn}} &nbsp; DOI: <a href="https://doi.org/{{doi}}">{{doi}}</a>
+    </nav>
   </header>
 
-  <main class="revista-main" id="contenido-principal">
-    <article class="revista-columna revista-articulo">
-      {{contenido}}
-    </article>
-  </main>
+  <main>{{contenido}}</main>
 
-  <footer class="revista-footer">
+  <footer class="footer">
     <div class="revista-columna revista-footer-contenido">
       <address class="revista-datos-institucionales">
         <p><strong>Directora:</strong> {{magazine.directora}}</p>

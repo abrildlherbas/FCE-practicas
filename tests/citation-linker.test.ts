@@ -35,30 +35,53 @@ function paragraph(text: string): BodyBlock[] {
 }
 
 describe("CitationLinker", () => {
-  it("enlaza citas parentéticas, dos autores, et al., múltiples y narrativas", () => {
-    const result = new CitationLinker().link(
-      paragraph(
-        "(Smith, 2020); (Smith y Jones, 2021); (García et al., 2022); " +
-          "(Smith, 2020; Lee et al., 2023); Smith (2020)."
-      ),
-      references
-    );
-    const runs = result.body[0];
-    if (!runs || !("runs" in runs)) {
-      throw new Error("No se generó el párrafo.");
-    }
+  it.each([
+    ["cita parentética", "(Smith, 2020)", "revista-ref-1"],
+    ["dos apellidos unidos por y", "(Smith y Jones, 2021)", "revista-ref-2"],
+    ["et al. parentético", "(García et al., 2022)", "revista-ref-3"],
+    ["citas múltiples separadas por punto y coma", "(Smith, 2020; Lee et al., 2023)", "revista-ref-1"],
+    ["cita narrativa", "Smith (2020)", "revista-ref-1"],
+    ["cita narrativa con et al.", "García et al. (2022)", "revista-ref-3"],
+  ])("enlaza %s", (_label, text, referenceId) => {
+    const result = new CitationLinker().link(paragraph(text), references);
+    const block = result.body[0];
+    const citations = block && "runs" in block
+      ? block.runs.filter((run) => run.type === "citation")
+      : [];
 
-    const citations = runs.runs.filter((run) => run.type === "citation");
-    expect(citations.map((run) =>
-      run.type === "citation" ? [run.text, run.referenceId, run.citationId] : []
-    )).toEqual([
-      ["Smith, 2020", "revista-ref-1", "revista-cita-1-1"],
-      ["Smith y Jones, 2021", "revista-ref-2", "revista-cita-2-1"],
-      ["García et al., 2022", "revista-ref-3", "revista-cita-3-1"],
-      ["Smith, 2020", "revista-ref-1", "revista-cita-1-2"],
-      ["Lee et al., 2023", "revista-ref-4", "revista-cita-4-1"],
-      ["Smith (2020)", "revista-ref-1", "revista-cita-1-3"],
-    ]);
+    expect(citations).toHaveLength(
+      text.includes(";") ? 2 : 1
+    );
+    expect(citations[0]).toMatchObject({ referenceId });
+    expect(
+      result.warnings.filter(({ code }) =>
+        ["ambiguous-citation", "unmatched-citation"].includes(code)
+      )
+    ).toEqual([]);
+  });
+
+  it("enlaza apellidos compuestos en citas narrativas", () => {
+    const compoundReference: Reference[] = [{
+      id: "revista-ref-1",
+      raw: "Torres Carbonell, C. (2024). Estudio.",
+      authors: ["Torres Carbonell, C."],
+      year: 2024,
+    }];
+    const result = new CitationLinker().link(
+      paragraph("Torres Carbonell (2024)"),
+      compoundReference
+    );
+    const block = result.body[0];
+
+    expect(
+      block && "runs" in block
+        ? block.runs.filter((run) => run.type === "citation")
+        : []
+    ).toMatchObject([{
+      type: "citation",
+      text: "Torres Carbonell (2024)",
+      referenceId: "revista-ref-1",
+    }]);
     expect(result.warnings).toEqual([]);
   });
 

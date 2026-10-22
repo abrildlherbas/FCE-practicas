@@ -1,13 +1,16 @@
 export {};
 
-import type { Article } from "../converter/models/Article";
+import type { Article, ParseWarning } from "../converter/models/Article";
 
 declare global {
   interface Window {
     electronAPI: {
       selectDocument(): Promise<string | null>;
 
-      convertDocument(filePath: string): Promise<Article>;
+      convertDocument(
+        filePath: string,
+        previousWarnings?: ParseWarning[]
+      ): Promise<Article>;
 
       preparePreview(html: string): Promise<string>;
 

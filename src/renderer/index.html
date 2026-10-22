@@ -82,19 +82,9 @@
                 aria-describedby="brandColorStatus"
               />
               <span id="brandColorStatus" role="status" aria-live="polite">
-                El color elegido debe permitir leer texto blanco.
+                El color se valida únicamente en formato hexadecimal #RRGGBB.
               </span>
             </div>
-            <label for="brandLogo">Logo de la revista (opcional)</label>
-            <input
-              id="brandLogo"
-              type="file"
-              accept=".png,.svg,.jpg,.jpeg,image/png,image/svg+xml,image/jpeg"
-              aria-describedby="brandLogoStatus"
-            />
-            <p id="brandLogoStatus" role="status" aria-live="polite">
-              Formatos PNG, SVG o JPG; máximo 500 KB.
-            </p>
           </fieldset>
         </section>
 
@@ -120,21 +110,42 @@
               <div class="section-heading">
                 <h3 id="preview-title">Vista del artículo</h3>
                 <p>Así se verá el documento guardado.</p>
+                <div class="preview-actions">
+                  <button id="expandPreviewButton" class="button button-secondary" type="button">
+                    Ampliar vista
+                  </button>
+                  <button id="editHtmlButton" class="button button-secondary" type="button">
+                    Editar
+                  </button>
+                  <button id="saveHtmlEditButton" class="button button-primary" type="button" hidden>
+                    Guardar edición
+                  </button>
+                  <button id="cancelHtmlEditButton" class="button button-secondary" type="button" hidden>
+                    Cancelar edición
+                  </button>
+                </div>
+                <p id="editWarning" class="edit-warning" hidden>
+                  Si vuelves a generar el artículo, podrías perder esta edición manual.
+                </p>
               </div>
               <iframe
                 id="articlePreview"
                 class="article-preview"
                 title="Vista previa del artículo"
-                sandbox=""
+                sandbox="allow-same-origin"
               ></iframe>
             </section>
 
             <aside class="warnings-panel" aria-labelledby="warnings-title">
               <div class="section-heading">
-                <h3 id="warnings-title">Puntos para revisar</h3>
-                <p id="warningSummary"></p>
+                <h3 id="warnings-title">
+                  <button id="warningsTab" class="warnings-tab" type="button" role="tab" aria-selected="true" aria-controls="warningList">
+                    Errores <span id="pendingWarningCount" class="warning-count">0</span>
+                  </button>
+                </h3>
+                <p id="warningSummary" role="status" aria-live="polite"></p>
               </div>
-              <ul id="warningList" class="warning-list" aria-live="polite"></ul>
+              <ul id="warningList" class="warning-list" role="tabpanel" aria-labelledby="warningsTab" aria-live="polite"></ul>
             </aside>
           </div>
 

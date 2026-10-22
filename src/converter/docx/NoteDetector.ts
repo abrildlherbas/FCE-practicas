@@ -39,7 +39,6 @@ function resolvedSize(paragraph: NoteParagraph): number | null {
 }
 
 function extractReference(raw: string, id: string): Reference {
-  const doiMatch = noteRules.doiPattern.exec(raw);
   const authorYearMatch = noteRules.authorYearPattern.exec(raw);
   const authorText = authorYearMatch?.[1].trim();
   const hasRecognizableAuthor =
@@ -57,9 +56,6 @@ function extractReference(raw: string, id: string): Reference {
   if (authorYearMatch && hasRecognizableAuthor) {
     const year = Number.parseInt(authorYearMatch[2], 10);
     if (Number.isFinite(year)) reference.year = year;
-  }
-  if (doiMatch) {
-    reference.doi = doiMatch[1].replace(/[.,;]+$/, "");
   }
 
   return reference;
@@ -115,12 +111,13 @@ export class NoteDetector {
 
       const reference = extractReference(raw, `revista-ref-${references.length + 1}`);
       references.push(reference);
-      if (reference.authors === undefined && reference.doi === undefined) {
+      if (reference.authors === undefined || reference.year === undefined) {
         warnings.push({
           code: "unclassified-reference",
           message:
-            `La entrada de referencias se conserva como texto, pero no se pudieron reconocer autor, año ni DOI. Texto: ${raw}`,
+            `La entrada de referencias se conserva como texto, pero no se pudieron reconocer autor y año. Texto: ${raw}`,
           blockIndex: paragraph.blockIndex,
+          status: "pendiente",
         });
       }
     }
@@ -166,6 +163,7 @@ export class NoteDetector {
                 message:
                   `El párrafo tiene un posible marcador de nota, pero no se pudo confirmar que su tamaño sea menor al del cuerpo. Texto: ${text}`,
                 blockIndex: paragraph.blockIndex,
+                status: "pendiente",
               });
             }
             continue;
@@ -183,6 +181,7 @@ export class NoteDetector {
                 message:
                   "Se encontró un marcador de nota sin texto reconocible.",
                 blockIndex: paragraph.blockIndex,
+                status: "pendiente",
               });
               continue;
             }
@@ -203,6 +202,7 @@ export class NoteDetector {
               message:
                 `El párrafo tiene texto en superíndice y tamaño menor al cuerpo, pero no se pudo identificar su marcador de nota. Texto: ${text}`,
               blockIndex: paragraph.blockIndex,
+              status: "pendiente",
             });
           }
         }

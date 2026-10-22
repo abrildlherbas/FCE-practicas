@@ -8,6 +8,7 @@ export interface Article {
   header: {
     title?: string;
     title_en?: string;
+    sourceParagraphs?: string[];
     authors: ArticleAuthor[];
     affiliations: ArticleAffiliation[];
     abstract?: string;
@@ -51,6 +52,8 @@ export interface ParseWarning {
   code: string;
   message: string;
   blockIndex?: number;
+  blockId?: string;
+  status: "pendiente" | "resuelto";
 }
 
 export interface Note {
@@ -69,7 +72,6 @@ export interface Reference {
   raw: string;
   authors?: string[];
   year?: number;
-  doi?: string;
 }
 
 export type InlineRun =

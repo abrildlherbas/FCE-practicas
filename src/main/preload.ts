@@ -4,8 +4,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   selectDocument: () =>
     ipcRenderer.invoke("select-document"),
 
-  convertDocument: (filePath: string) =>
-    ipcRenderer.invoke("convert-document", filePath),
+  convertDocument: (filePath: string, previousWarnings = []) =>
+    ipcRenderer.invoke("convert-document", filePath, previousWarnings),
 
   preparePreview: (html: string) =>
     ipcRenderer.invoke("prepare-preview", html),

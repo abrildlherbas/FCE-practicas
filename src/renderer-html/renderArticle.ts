@@ -4,18 +4,15 @@ import type {
   InlineRun,
   Note,
 } from "../converter/models/Article";
-import { validateBrandColor } from "./contrast";
-import type { ValidatedBrandLogo } from "./brand-logo";
+import { TEMPLATE_VERSION } from "../template/templateVersion";
 import { articleStyles } from "./styles";
 
 interface NoteReference {
   referenceId: string;
 }
 
-export interface ArticleBrand {
+export interface MagazineConfig {
   color: string;
-  logo?: ValidatedBrandLogo;
-  magazineName?: string;
 }
 
 function escapeHtml(value: string): string {
@@ -97,14 +94,16 @@ function headingTag(
     : 1;
   const level = Math.min(
     6,
-    Math.max(2, safeLevel + 1),
+    Math.max(3, safeLevel + 2),
     previousLevel + 1
   );
   return { tag: `h${level}`, level };
 }
 
-function renderTable(block: Extract<BodyBlock, { type: "table" }>, index: number): string {
-  const caption = `<caption>Tabla ${index}</caption>`;
+function renderTable(
+  block: Extract<BodyBlock, { type: "table" }>,
+  blockId: string
+): string {
   const tableRows = block.rows
     .map((row) => {
       const cells =
@@ -128,7 +127,7 @@ function renderTable(block: Extract<BodyBlock, { type: "table" }>, index: number
         .join("")}</tr></thead>`
     : "";
 
-  return `<div class="article-table-wrap"><table class="article-table">${caption}${header}<tbody>${tableRows}</tbody></table></div>`;
+  return `<div class="article-table-wrap" data-bloque-id="${blockId}"><table class="article-table">${header}<tbody>${tableRows}</tbody></table></div>`;
 }
 
 function renderBody(
@@ -136,18 +135,17 @@ function renderBody(
   noteMap: Map<string, Note>,
   references: Map<string, NoteReference[]>
 ): string {
-  let previousHeadingLevel = 1;
-  let tableIndex = 0;
-
+  let previousHeadingLevel = 2;
   return article.body
     .map((block, blockIndex) => {
+      const blockId = `b-${blockIndex}`;
       if (block.type === "heading") {
         const { tag, level } = headingTag(
           block.level,
           previousHeadingLevel
         );
         previousHeadingLevel = level;
-        return `<${tag}>${renderRuns(
+        return `<${tag} data-bloque-id="${blockId}">${renderRuns(
           block.runs,
           noteMap,
           references,
@@ -156,7 +154,7 @@ function renderBody(
       }
 
       if (block.type === "paragraph") {
-        return `<p class="article-paragraph">${renderRuns(
+        return `<p class="article-paragraph" data-bloque-id="${blockId}">${renderRuns(
           block.runs,
           noteMap,
           references,
@@ -165,11 +163,10 @@ function renderBody(
       }
 
       if (block.type === "table") {
-        tableIndex += 1;
-        return renderTable(block, tableIndex);
+        return renderTable(block, blockId);
       }
 
-      return `<figure class="article-figure"><img src="${escapeHtml(
+      return `<figure class="article-figure" data-bloque-id="${blockId}"><img src="${escapeHtml(
         `${article.document.source.replace(/\.[^.]+$/, "")}_assets/${block.fileName}`
       )}" alt="${escapeHtml(block.alt ?? "")}" /></figure>`;
     })
@@ -251,6 +248,27 @@ function renderAuthors(article: Article): string {
   return `<p class="article-byline">${authors}</p>`;
 }
 
+function renderSourceParagraphs(article: Article): string {
+  const paragraphs = article.header.sourceParagraphs;
+  if (!paragraphs?.length) return "";
+
+  const title = article.header.title?.trim();
+  let titleRendered = false;
+  return paragraphs
+    .map((paragraph) => {
+      if (!titleRendered && title && paragraph.trim() === title) {
+        titleRendered = true;
+        return `<h2 class="article-heading" id="article-title">${escapeHtml(
+          paragraph
+        )}</h2>`;
+      }
+      return `<p class="article-header-source">${escapeHtml(
+        paragraph
+      )}</p>`;
+    })
+    .join("\n");
+}
+
 function renderAffiliations(article: Article): string {
   if (!article.header.affiliations.length) return "";
 
@@ -316,22 +334,43 @@ function renderNotes(
           ({ referenceId }, index) =>
             `<a href="#${referenceId}" aria-label="Volver a la referencia ${
               index + 1
-            } de la nota ${note.id}" role="doc-backlink">↩</a>`
+            } de la nota ${note.id}" role="doc-backlink"></a>`
         )
-        .join(" ");
+        .join("");
       const typeLabel =
         note.type === "footnote" ? "Nota al pie" : "Nota final";
       return `<li id="${noteDomId(note.type, note.id)}" aria-label="${typeLabel} ${note.id}" role="doc-footnote"><span class="note-content">${escapeHtml(
         note.text
-      )}</span>${
-        backlinks
-          ? `<span class="note-backlinks">${backlinks}</span>`
-          : ""
-      }</li>`;
+      )}</span>${backlinks}</li>`;
     })
     .join("");
 
-  return `<section class="article-notes" id="article-notes" aria-labelledby="notes-heading"><h2 id="notes-heading">Notas</h2><ol>${items}</ol></section>`;
+  return `<section class="article-notes" id="article-notes"><ol>${items}</ol></section>`;
+}
+
+function renderReferences(
+  article: Article,
+  backlinks: Map<string, string[]>
+): string {
+  return `<section class="article-references" id="article-references" aria-labelledby="references-heading"><h2 id="references-heading">Referencias bibliográficas</h2><ol>${article.references
+    .map(
+      (reference, index) => {
+        const links = (backlinks.get(reference.id) ?? [])
+          .map(
+            (citationId, citationIndex) =>
+              `<a class="reference-backlink" href="#${escapeHtml(
+                citationId
+              )}" aria-label="Volver a la cita ${citationIndex + 1} de la referencia ${
+                index + 1
+              }" role="doc-backlink"></a>`
+          )
+          .join("");
+        return `<li id="${escapeHtml(reference.id)}">${escapeHtml(
+          reference.raw
+        )}${links}</li>`;
+      }
+    )
+    .join("")}</ol></section>`;
 }
 
 function citationBacklinks(article: Article): Map<string, string[]> {
@@ -348,108 +387,17 @@ function citationBacklinks(article: Article): Map<string, string[]> {
   return backlinks;
 }
 
-function renderReferences(
-  article: Article,
-  backlinks: Map<string, string[]>
-): string {
-  return `<section class="article-references" id="article-references" aria-labelledby="references-heading"><h2 id="references-heading">Referencias bibliográficas</h2><ol>${article.references
-    .map(
-      (reference, index) => {
-        const links = (backlinks.get(reference.id) ?? [])
-          .map(
-            (citationId, citationIndex) =>
-              `<a href="#${escapeHtml(
-                citationId
-              )}" aria-label="Volver a la cita ${citationIndex + 1} de la referencia ${
-                index + 1
-              }" role="doc-backlink">↩</a>`
-          )
-          .join(" ");
-        return `<li id="${escapeHtml(reference.id)}">${escapeHtml(
-          reference.raw
-        )}${
-          links
-            ? ` <span class="reference-backlinks">${links}</span>`
-            : ""
-        }</li>`;
-      }
-    )
-    .join("")}</ol></section>`;
-}
-
 export function renderArticle(
   article: Article,
-  brand?: ArticleBrand
+  magazine?: MagazineConfig
 ): string {
   const title = article.header.title?.trim() || "Artículo sin título";
-  const brandColor = brand ? validateBrandColor(brand.color) : null;
-  if (brandColor && !brandColor.valid) {
-    throw new Error(brandColor.error);
+  const magazineColor = magazine?.color ?? "#245B4B";
+  if (!/^#[0-9a-f]{6}$/i.test(magazineColor)) {
+    throw new Error("El color debe ser hexadecimal válido en formato #RRGGBB.");
   }
-  const logoDataUri = brand?.logo?.dataUri;
-  if (
-    logoDataUri &&
-    !/^data:image\/(?:png|jpeg|svg\+xml);base64,[a-z0-9+/]+=*$/i.test(
-      logoDataUri
-    )
-  ) {
-    throw new Error("El logo debe estar validado y embebido en el artículo.");
-  }
-  const brandStyles =
-    brandColor?.valid
-      ? `
-:root {
-  --revista-color: ${brandColor.color};
-  ${logoDataUri ? `--revista-logo-url: url("${logoDataUri}");` : ""}
-}
-
-.journal-header,
-.journal-footer {
-  background-color: var(--revista-color);
-  color: #fff;
-}
-
-.journal-header a,
-.journal-footer a,
-.journal-masthead,
-.journal-footer-inner {
-  color: #fff;
-}
-
-.journal-header a:focus-visible,
-.journal-footer a:focus-visible {
-  outline: 2px solid #fff;
-  outline-offset: 3px;
-}
-
-main a,
-main .note-reference a {
-  color: var(--revista-color);
-}
-
-${logoDataUri ? `
-.revista-logo {
-  flex: 0 0 8rem;
-  width: 8rem;
-  height: 6rem;
-  background-color: #fff;
-  background-image: var(--revista-logo-url);
-  background-position: center;
-  background-repeat: no-repeat;
-  background-size: contain;
-}
-
-.journal-header .revista-logo,
-.journal-footer .revista-logo {
-  margin: 0.75rem auto;
-}
-` : ""}`
-      : "";
-  const logo = logoDataUri
-    ? `<div class="revista-logo" role="img" aria-label="Logo de ${escapeHtml(
-        brand?.magazineName ?? "Revista científica"
-      )}"></div>`
-    : "";
+  const magazineColorStyles =
+    `:root{--revista-color:${magazineColor.toUpperCase()}}`;
   const noteMap = new Map(
     article.notes.map((note) => [
       noteKey(note.type, note.id),
@@ -470,28 +418,30 @@ ${logoDataUri ? `
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="template-version" content="${TEMPLATE_VERSION}" />
   <title>${escapeHtml(title)}</title>
-  <style>${articleStyles}${brandStyles}</style>
+  <style>${articleStyles}${magazineColorStyles}</style>
 </head>
 <body>
-  <header class="journal-header">
-    ${logo}
+  <header class="header">
     <div class="journal-masthead">Revista científica</div>
   </header>
   <main id="main-content">
     <article class="article-content" aria-labelledby="article-title">
       <header class="article-header">
         <section class="article-data" aria-label="Datos del artículo">
-          <h1 class="article-heading" id="article-title">${escapeHtml(
-            title
-          )}</h1>
-          ${titleTranslation}
-          ${renderAuthors(article)}
-          ${renderAffiliations(article)}
-          ${renderDates(article)}
-          ${renderAbstracts(article)}
-          ${renderKeywords(article)}
-          ${renderMetadata(article)}
+          ${renderSourceParagraphs(article) || [
+            `<h2 class="article-heading" id="article-title">${escapeHtml(
+              title
+            )}</h2>`,
+            titleTranslation,
+            renderAuthors(article),
+            renderAffiliations(article),
+            renderDates(article),
+            renderAbstracts(article),
+            renderKeywords(article),
+            renderMetadata(article),
+          ].join("")}
         </section>
       </header>
       <section class="article-body" aria-label="Texto del artículo">
@@ -501,10 +451,9 @@ ${logoDataUri ? `
       ${renderReferences(article, referenceBacklinks)}
     </article>
   </main>
-  <footer class="journal-footer">
-    <div class="journal-footer-inner">
+  <footer class="footer">
+    <div class="footer-inner">
       <span>Revista científica</span>
-      ${logo}
       <nav aria-label="Navegación del artículo">
         <ul>
           <li><a href="#main-content">Inicio del artículo</a></li>

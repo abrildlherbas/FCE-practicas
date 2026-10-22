@@ -70,7 +70,6 @@ describe("NoteDetector", () => {
         raw: "Smith, J. (2020). Un estudio. https://doi.org/10.1234/example",
         authors: ["Smith, J."],
         year: 2020,
-        doi: "10.1234/example",
       },
       { id: "revista-ref-2", raw: "Entrada de referencia no reconocida" },
     ]);
@@ -78,8 +77,9 @@ describe("NoteDetector", () => {
       {
         code: "unclassified-reference",
         message:
-          "La entrada de referencias se conserva como texto, pero no se pudieron reconocer autor, año ni DOI. Texto: Entrada de referencia no reconocida",
+          "La entrada de referencias se conserva como texto, pero no se pudieron reconocer autor y año. Texto: Entrada de referencia no reconocida",
         blockIndex: 6,
+        status: "pendiente",
       },
     ]);
   });
@@ -170,6 +170,7 @@ describe("NoteDetector", () => {
         message:
           "El párrafo tiene un posible marcador de nota, pero no se pudo confirmar que su tamaño sea menor al del cuerpo. Texto: [1] Posible nota",
         blockIndex: 1,
+        status: "pendiente",
       },
     ]);
   });

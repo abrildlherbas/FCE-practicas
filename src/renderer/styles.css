@@ -374,6 +374,71 @@ iframe:focus-visible {
   padding: 1rem 1rem 0.8rem;
 }
 
+.preview-actions,
+.warning-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.preview-actions .button,
+.warning-actions button {
+  min-height: 36px;
+  padding: 0.45rem 0.7rem;
+  font-size: 0.82rem;
+}
+
+.edit-warning {
+  margin: 0.65rem 0 0;
+  color: var(--warning);
+  font-size: 0.84rem;
+  font-weight: 600;
+}
+
+.article-preview.is-expanded {
+  position: fixed;
+  z-index: 10;
+  inset: 1rem;
+  width: calc(100% - 2rem);
+  height: calc(100% - 2rem);
+  max-height: none;
+  border: 2px solid var(--accent);
+  box-shadow: 0 0 0 100vmax rgb(20 30 24 / 65%);
+}
+
+.article-preview.is-editing {
+  cursor: text;
+}
+
+.warnings-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+}
+
+.warnings-tab[aria-selected="true"] {
+  color: var(--accent);
+}
+
+.warning-count {
+  display: inline-grid;
+  min-width: 1.5rem;
+  min-height: 1.5rem;
+  place-items: center;
+  border-radius: 999px;
+  padding-inline: 0.35rem;
+  background: var(--warning-bg);
+  color: var(--warning);
+  font-size: 0.76rem;
+}
+
 .section-heading h3 {
   margin: 0;
   font-size: 1rem;
@@ -414,9 +479,41 @@ iframe:focus-visible {
   line-height: 1.5;
 }
 
-.warning-item::before {
+.warning-target {
+  width: 100%;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  line-height: inherit;
+  text-align: left;
+}
+
+.warning-target::before {
   content: "Para revisar: ";
   font-weight: 700;
+}
+
+.warning-details {
+  margin: 0;
+}
+
+.warning-actions {
+  justify-content: flex-end;
+}
+
+.warning-actions button {
+  border: 1px solid var(--warning-border);
+  border-radius: 5px;
+  background: #fffdf7;
+  color: #503b12;
+  cursor: pointer;
+}
+
+.warning-actions button:hover {
+  border-color: var(--warning);
 }
 
 .no-warnings {

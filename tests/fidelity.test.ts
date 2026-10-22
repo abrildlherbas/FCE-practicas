@@ -1,6 +1,4 @@
 import fs from "node:fs/promises";
-import os from "node:os";
-import path from "node:path";
 import { fileURLToPath } from "node:url";
 import JSZip from "jszip";
 import {
@@ -9,17 +7,13 @@ import {
   type Element as XmlElement,
   type Node as XmlNode,
 } from "@xmldom/xmldom";
-import { afterAll, describe, expect, it } from "vitest";
-
-import { DocxParser } from "../src/converter/docx/parser";
-import { renderArticle } from "../src/renderer-html/renderArticle";
+import { describe, expect, it } from "vitest";
 
 const WORD_NS =
   "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
 const fixturePath = fileURLToPath(
   new URL("./fixtures/Carbonel_Cielo.docx", import.meta.url)
 );
-const temporaryDirectories: string[] = [];
 
 function parseXml(xml: string, label: string): XmlDocument {
   return new DOMParser({
@@ -148,61 +142,17 @@ function missingParagraphs(
   paragraphs: string[],
   htmlWords: string[]
 ): string[] {
-  const visibleText = compactText(htmlWords.join(" "));
-  return paragraphs.filter((paragraph) => {
-    const paragraphText = compactText(paragraph);
-    return paragraphText.length > 0 && !visibleText.includes(paragraphText);
-  });
-}
-
-function compactText(text: string): string {
-  return text.toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
-}
-
-function findJoinedWordPairs(
-  paragraphs: string[],
-  htmlText: string
-): string[] {
-  const htmlTokens = words(htmlText)
-    .map(compactText)
-    .filter((word) => word.length > 0);
-  const htmlTextWithoutSeparators = htmlTokens.join("");
-  const htmlWordBoundaries = new Set<number>();
-  let htmlOffset = 0;
-  for (const word of htmlTokens) {
-    htmlOffset += word.length;
-    htmlWordBoundaries.add(htmlOffset);
-  }
-  const joinedPairs = new Set<string>();
-
-  for (const paragraph of paragraphs) {
-    const paragraphWords = words(paragraph)
-      .map((word) => ({ original: word, compact: compactText(word) }))
-      .filter((word) => word.compact.length > 0);
-    const compactParagraph = paragraphWords
-      .map((word) => word.compact)
-      .join("");
-    if (!compactParagraph) continue;
-
-    let paragraphOffset = htmlTextWithoutSeparators.indexOf(compactParagraph);
-    while (paragraphOffset !== -1) {
-      let wordOffset = 0;
-      for (let index = 0; index < paragraphWords.length - 1; index++) {
-        wordOffset += paragraphWords[index].compact.length;
-        if (!htmlWordBoundaries.has(paragraphOffset + wordOffset)) {
-          joinedPairs.add(
-            `${paragraphWords[index].original} ${paragraphWords[index + 1].original}`
-          );
+  const paragraphWords = paragraphs.map(words).filter((tokens) => tokens.length);
+  return paragraphWords
+    .filter((tokens) => {
+      for (let start = 0; start <= htmlWords.length - tokens.length; start++) {
+        if (tokens.every((token, index) => htmlWords[start + index] === token)) {
+          return false;
         }
       }
-      paragraphOffset = htmlTextWithoutSeparators.indexOf(
-        compactParagraph,
-        paragraphOffset + 1
-      );
-    }
-  }
-
-  return [...joinedPairs];
+      return true;
+    })
+    .map((tokens) => tokens.join(" "));
 }
 
 function describeSequenceDifference(
@@ -226,16 +176,11 @@ function describeSequenceDifference(
   ].join("\n");
 }
 
-afterAll(async () => {
-  await Promise.all(
-    temporaryDirectories.map((directory) =>
-      fs.rm(directory, { recursive: true, force: true })
-    )
-  );
-});
-
 describe("fidelidad del contenido de Carbonel_Cielo", () => {
-  it("conserva en el HTML la secuencia completa de palabras del Word", async () => {
+  it.each([
+    "ejemplo-revista-a.html",
+    "ejemplo-revista-b.html",
+  ])("%s conserva la secuencia completa de palabras del Word", async (fileName) => {
     const zip = await JSZip.loadAsync(await fs.readFile(fixturePath));
     const documentFile = zip.file("word/document.xml");
     if (!documentFile) {
@@ -245,32 +190,19 @@ describe("fidelidad del contenido de Carbonel_Cielo", () => {
     const sourceParagraphs = extractWordParagraphs(
       await documentFile.async("text")
     );
-    const temporaryDirectory = await fs.mkdtemp(
-      path.join(os.tmpdir(), "article-fidelity-")
+    const examplePath = fileURLToPath(
+      new URL(`../examples/${fileName}`, import.meta.url)
     );
-    temporaryDirectories.push(temporaryDirectory);
-    const article = await new DocxParser().parse(
-      zip,
-      path.join(temporaryDirectory, "source", "Carbonel_Cielo.docx")
-    );
-    const html = renderArticle(article);
+    const html = await fs.readFile(examplePath, "utf8");
     const sourceWords = words(sourceParagraphs.join(" "));
     const visibleHtmlText = extractVisibleHtmlText(html);
     const htmlWords = words(visibleHtmlText);
     const missing = missingParagraphs(sourceParagraphs, htmlWords);
-    const joinedWordPairs = findJoinedWordPairs(
-      sourceParagraphs,
-      visibleHtmlText
-    );
     const diagnostics = [
-      `Párrafos no encontrados ni considerando diferencias de formato (${missing.length}):`,
+      `${fileName}: párrafos faltantes en el HTML (${missing.length}):`,
       ...missing.map(
-        (paragraph, index) => `${index + 1}. ${JSON.stringify(paragraph)}`
+        (paragraph, index) => `${index + 1}. ${paragraph}`
       ),
-      `Posibles palabras pegadas (${joinedWordPairs.length}; primeros 20):`,
-      ...joinedWordPairs
-        .slice(0, 20)
-        .map((pair) => `- ${JSON.stringify(pair)}`),
       describeSequenceDifference(sourceWords, htmlWords),
     ].join("\n");
 

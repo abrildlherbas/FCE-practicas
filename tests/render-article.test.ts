@@ -6,7 +6,6 @@ import {
 import { describe, expect, it } from "vitest";
 
 import type { Article } from "../src/converter/models/Article";
-import { validateBrandLogo } from "../src/renderer-html/brand-logo";
 import { renderArticle } from "../src/renderer-html/renderArticle";
 
 function createArticle(): Article {
@@ -129,7 +128,9 @@ describe("renderArticle", () => {
     expect(html.indexOf('class="article-data"')).toBeLessThan(
       html.indexOf('class="article-body"')
     );
-    const headings = elements(document, "h1");
+    const headings = elements(document, "h2").filter(
+      (element) => element.getAttribute("class") === "article-heading"
+    );
 
     expect(elements(document, "header")).toHaveLength(2);
     expect(elements(document, "main")).toHaveLength(1);
@@ -181,7 +182,7 @@ describe("renderArticle", () => {
     )
       .filter((element) => /^h[2-6]$/.test(element.tagName))
       .map((element) => Number(element.tagName.slice(1)));
-    expect(articleHeadingLevels).toEqual([2, 3]);
+    expect(articleHeadingLevels).toEqual([3, 4]);
     expect(
       articleHeadingLevels.every(
         (level, index) => index === 0 || level <= articleHeadingLevels[index - 1] + 1
@@ -223,17 +224,48 @@ describe("renderArticle", () => {
     );
     expect(backlink.getAttribute("href")).toBe("#revista-cita-1-1");
     expect(backlink.getAttribute("role")).toBe("doc-backlink");
+    expect(backlink.getAttribute("class")).toBe("reference-backlink");
+    expect(backlink.getAttribute("aria-label")).toBe(
+      "Volver a la cita 1 de la referencia 1"
+    );
   });
 
-  it("renderiza tablas caption/th scope e imágenes con alt obligatorio", () => {
+  it("renderiza un enlace de vuelta por cada cita de una referencia", () => {
+    const article = createArticle();
+    const bodyBlock = article.body.find(
+      (block) => block.type === "paragraph"
+    );
+    if (!bodyBlock || !("runs" in bodyBlock)) {
+      throw new Error("No se encontró un párrafo para añadir la segunda cita.");
+    }
+    bodyBlock.runs.push({
+      type: "text",
+      text: " y otra mención ",
+    });
+    bodyBlock.runs.push({
+      type: "citation",
+      text: "Pérez, 2024",
+      referenceId: "revista-ref-1",
+      citationId: "revista-cita-1-2",
+    });
+
+    const document = parseHtml(renderArticle(article));
+    const reference = byId(document, "revista-ref-1");
+    const backlinks = Array.from(reference.getElementsByTagName("a"));
+
+    expect(backlinks.map((link) => link.getAttribute("href"))).toEqual([
+      "#revista-cita-1-1",
+      "#revista-cita-1-2",
+    ]);
+  });
+
+  it("renderiza tablas con th scope e imágenes con alt obligatorio", () => {
     const document = parseHtml(renderArticle(createArticle()));
     const tables = elements(document, "table");
     const images = elements(document, "img");
 
     expect(tables).toHaveLength(2);
-    expect(tables[0].getElementsByTagName("caption")[0].textContent).toBe(
-      "Tabla 1"
-    );
+    expect(tables[0].getElementsByTagName("caption")).toHaveLength(0);
     expect(
       tables[0].getElementsByTagName("th")[0].getAttribute("scope")
     ).toBe("col");
@@ -266,42 +298,42 @@ describe("renderArticle", () => {
     expect(byId(second, "article-references")).toBeDefined();
   });
 
-  it("aplica el color validado y embebe el logo en el HTML exportable", () => {
-    const logo = validateBrandLogo(
-      "revista.svg",
-      new TextEncoder().encode('<svg xmlns="http://www.w3.org/2000/svg"></svg>')
-    );
-    if (!logo.valid) throw new Error(logo.error);
-
-    const html = renderArticle(createArticle(), {
-      color: "#123A70",
-      logo: logo.logo,
-      magazineName: "Revista de prueba",
-    });
+  it("inyecta solo un color hexadecimal en un bloque style sin logo dinámico", () => {
+    const html = renderArticle(createArticle(), { color: "#123A70" });
     const document = parseHtml(html);
-    const logoDataUri = logo.logo.dataUri;
 
-    expect(html).toContain(`--revista-color: #123A70;`);
-    expect(html).toContain(`--revista-logo-url: url("${logoDataUri}");`);
-    expect(html).not.toContain('background-image: url("revista.svg")');
-    const logos = elements(document, "div").filter(
-      (element) => element.getAttribute("class") === "revista-logo"
-    );
-    expect(logos).toHaveLength(2);
-    expect(logos.map((element) => element.getAttribute("role"))).toEqual([
-      "img",
-      "img",
-    ]);
-    expect(logos[0].getAttribute("aria-label")).toBe(
-      "Logo de Revista de prueba"
+    expect(document.getElementsByTagName("style")).toHaveLength(1);
+    expect(html).toContain(":root{--revista-color:#123A70}");
+    expect(html).not.toContain("--revista-logo-url");
+    expect(elements(document, "*").filter((element) =>
+      element.hasAttribute("style")
+    )).toHaveLength(0);
+  });
+
+  it("acepta colores válidos independientemente del contraste", () => {
+    expect(renderArticle(createArticle(), { color: "#FFFF00" })).toContain(
+      "--revista-color:#FFFF00"
     );
   });
 
-  it("rechaza un color de marca que no cumple el contraste", () => {
-    expect(() =>
-      renderArticle(createArticle(), { color: "#FFFF00" })
-    ).toThrow(
-      "Este color es muy claro y dificulta la lectura. Probá uno más oscuro."
+  it("asigna ids de bloque estables entre renderizados del mismo artículo", () => {
+    const article = createArticle();
+    const first = parseHtml(renderArticle(article));
+    const second = parseHtml(renderArticle(article));
+    const blockIds = (document: XmlDocument): string[] =>
+      Array.from(document.getElementsByTagName("*"))
+        .map((element) => element.getAttribute("data-bloque-id"))
+        .filter((id): id is string => id !== null);
+
+    expect(blockIds(first)).toEqual(
+      article.body.map((_, index) => `b-${index}`)
     );
+    expect(blockIds(second)).toEqual(blockIds(first));
+  });
+
+  it("rechaza valores que no sean colores hexadecimales #RRGGBB", () => {
+    expect(() =>
+      renderArticle(createArticle(), { color: "rgb(0, 0, 0)" })
+    ).toThrow("El color debe ser hexadecimal válido en formato #RRGGBB.");
   });
 });
