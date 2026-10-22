@@ -4,10 +4,18 @@ import type {
   InlineRun,
   Note,
 } from "../converter/models/Article";
+import { validateBrandColor } from "./contrast";
+import type { ValidatedBrandLogo } from "./brand-logo";
 import { articleStyles } from "./styles";
 
 interface NoteReference {
   referenceId: string;
+}
+
+export interface ArticleBrand {
+  color: string;
+  logo?: ValidatedBrandLogo;
+  magazineName?: string;
 }
 
 function escapeHtml(value: string): string {
@@ -369,8 +377,79 @@ function renderReferences(
     .join("")}</ol></section>`;
 }
 
-export function renderArticle(article: Article): string {
+export function renderArticle(
+  article: Article,
+  brand?: ArticleBrand
+): string {
   const title = article.header.title?.trim() || "Artículo sin título";
+  const brandColor = brand ? validateBrandColor(brand.color) : null;
+  if (brandColor && !brandColor.valid) {
+    throw new Error(brandColor.error);
+  }
+  const logoDataUri = brand?.logo?.dataUri;
+  if (
+    logoDataUri &&
+    !/^data:image\/(?:png|jpeg|svg\+xml);base64,[a-z0-9+/]+=*$/i.test(
+      logoDataUri
+    )
+  ) {
+    throw new Error("El logo debe estar validado y embebido en el artículo.");
+  }
+  const brandStyles =
+    brandColor?.valid
+      ? `
+:root {
+  --revista-color: ${brandColor.color};
+  ${logoDataUri ? `--revista-logo-url: url("${logoDataUri}");` : ""}
+}
+
+.journal-header,
+.journal-footer {
+  background-color: var(--revista-color);
+  color: #fff;
+}
+
+.journal-header a,
+.journal-footer a,
+.journal-masthead,
+.journal-footer-inner {
+  color: #fff;
+}
+
+.journal-header a:focus-visible,
+.journal-footer a:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 3px;
+}
+
+main a,
+main .note-reference a {
+  color: var(--revista-color);
+}
+
+${logoDataUri ? `
+.revista-logo {
+  flex: 0 0 8rem;
+  width: 8rem;
+  height: 6rem;
+  background-color: #fff;
+  background-image: var(--revista-logo-url);
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain;
+}
+
+.journal-header .revista-logo,
+.journal-footer .revista-logo {
+  margin: 0.75rem auto;
+}
+` : ""}`
+      : "";
+  const logo = logoDataUri
+    ? `<div class="revista-logo" role="img" aria-label="Logo de ${escapeHtml(
+        brand?.magazineName ?? "Revista científica"
+      )}"></div>`
+    : "";
   const noteMap = new Map(
     article.notes.map((note) => [
       noteKey(note.type, note.id),
@@ -392,10 +471,11 @@ export function renderArticle(article: Article): string {
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>${escapeHtml(title)}</title>
-  <style>${articleStyles}</style>
+  <style>${articleStyles}${brandStyles}</style>
 </head>
 <body>
   <header class="journal-header">
+    ${logo}
     <div class="journal-masthead">Revista científica</div>
   </header>
   <main id="main-content">
@@ -424,6 +504,7 @@ export function renderArticle(article: Article): string {
   <footer class="journal-footer">
     <div class="journal-footer-inner">
       <span>Revista científica</span>
+      ${logo}
       <nav aria-label="Navegación del artículo">
         <ul>
           <li><a href="#main-content">Inicio del artículo</a></li>

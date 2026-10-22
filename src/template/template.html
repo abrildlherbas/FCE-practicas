@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{titulo_articulo}}</title>
+  <style>{{revista_css}}</style>
+</head>
+<body>
+  <header
+    class="revista-header"
+    data-obc-id="{{obc_id}}"
+    data-revista-id="{{revista_id}}"
+    data-articulo-id="{{articulo_id}}"
+  >
+    <div class="revista-columna revista-header-contenido">
+      <div
+        class="revista-logo"
+        role="img"
+        aria-label="Logo de {{nombre_revista}}"
+      ></div>
+      <div class="revista-identificacion">
+        <p class="revista-nombre">{{nombre_revista}}</p>
+        <p class="revista-institucion">{{institucion}}</p>
+        <p class="revista-edicion">{{anio}} / {{numero}} / {{volumen}}</p>
+        <nav class="revista-identidad" aria-label="Identificación de la revista">
+          <ul>
+            <li>ISSN: {{issn}}</li>
+            <li>eISSN: {{eissn}}</li>
+            <li>
+              DOI:
+              <a href="https://doi.org/{{doi}}">https://doi.org/{{doi}}</a>
+            </li>
+          </ul>
+        </nav>
+      </div>
+    </div>
+  </header>
+
+  <main class="revista-main" id="contenido-principal">
+    <article class="revista-columna revista-articulo">
+      {{contenido}}
+    </article>
+  </main>
+
+  <footer class="revista-footer">
+    <div class="revista-columna revista-footer-contenido">
+      <address class="revista-datos-institucionales">
+        <p><strong>Directora:</strong> {{magazine.directora}}</p>
+        <p><strong>Propietario:</strong> {{magazine.propietario}}</p>
+        <p><strong>Rector:</strong> {{magazine.rector}}</p>
+        <p><strong>Dirección:</strong> {{magazine.direccion}}</p>
+        <p>
+          <strong>Mail:</strong>
+          <a href="mailto:{{magazine.mail}}">{{magazine.mail}}</a>
+        </p>
+      </address>
+      <div
+        class="revista-logo"
+        role="img"
+        aria-label="Logo de {{nombre_revista}}"
+      ></div>
+      <p class="revista-licencia">{{magazine.licencia}}</p>
+    </div>
+  </footer>
+</body>
+</html>

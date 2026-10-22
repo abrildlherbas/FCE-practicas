@@ -1,5 +1,10 @@
 import type { Article } from "../converter/models/Article";
 import { renderArticle } from "../renderer-html/renderArticle";
+import { validateBrandColor } from "../renderer-html/contrast";
+import {
+  validateBrandLogo,
+  type ValidatedBrandLogo,
+} from "../renderer-html/brand-logo";
 
 function getElement<T extends HTMLElement>(selector: string): T {
   const element = document.querySelector<T>(selector);
@@ -10,6 +15,10 @@ function getElement<T extends HTMLElement>(selector: string): T {
 }
 
 const selectButton = getElement<HTMLButtonElement>("#selectButton");
+const brandColorInput = getElement<HTMLInputElement>("#brandColor");
+const brandColorStatus = getElement<HTMLElement>("#brandColorStatus");
+const brandLogoInput = getElement<HTMLInputElement>("#brandLogo");
+const brandLogoStatus = getElement<HTMLElement>("#brandLogoStatus");
 const changeDocumentButton =
   getElement<HTMLButtonElement>("#changeDocumentButton");
 const newDocumentButton =
@@ -53,6 +62,13 @@ let currentFilePath = "";
 let downloadedHtmlUrl: string | null = null;
 let isApproved = false;
 let isBusy = false;
+let selectedBrandColor: string | null = null;
+let selectedBrandLogo: ValidatedBrandLogo | null = null;
+
+const initialBrandColor = validateBrandColor(brandColorInput.value);
+if (initialBrandColor.valid) {
+  selectedBrandColor = initialBrandColor.color;
+}
 
 function showMessage(message: string): void {
   appMessage.textContent = message;
@@ -153,6 +169,8 @@ function renderWarnings(article: Article): void {
 function setBusy(busy: boolean): void {
   isBusy = busy;
   selectButton.disabled = busy;
+  brandColorInput.disabled = busy;
+  brandLogoInput.disabled = busy;
   changeDocumentButton.disabled = busy;
   newDocumentButton.disabled = busy;
   approveButton.disabled = busy;
@@ -188,6 +206,13 @@ function resetToStart(): void {
 async function chooseAndPrepareDocument(): Promise<void> {
   if (isBusy) return;
   clearMessage();
+  if (!selectedBrandColor) {
+    showMessage(
+      "El color elegido es demasiado claro. Elegí un tono más oscuro para que el texto se pueda leer."
+    );
+    brandColorInput.focus();
+    return;
+  }
 
   let filePath: string | null;
   try {
@@ -216,7 +241,11 @@ async function chooseAndPrepareDocument(): Promise<void> {
 
   try {
     const article = await window.electronAPI.convertDocument(filePath);
-    const html = renderArticle(article);
+    const html = renderArticle(article, {
+      color: selectedBrandColor,
+      logo: selectedBrandLogo ?? undefined,
+      magazineName: "Revista científica",
+    });
     const previewHtml = await window.electronAPI.preparePreview(html);
 
     currentArticle = article;
@@ -243,6 +272,59 @@ async function chooseAndPrepareDocument(): Promise<void> {
 selectButton.addEventListener("click", chooseAndPrepareDocument);
 changeDocumentButton.addEventListener("click", chooseAndPrepareDocument);
 newDocumentButton.addEventListener("click", resetToStart);
+
+brandColorInput.addEventListener("input", () => {
+  const validation = validateBrandColor(brandColorInput.value);
+  brandColorStatus.classList.toggle("is-error", !validation.valid);
+  if (validation.valid) {
+    selectedBrandColor = validation.color;
+    brandColorStatus.textContent =
+      `Color listo. Contraste con texto blanco: ${validation.contrastRatio.toFixed(2)}:1.`;
+    return;
+  }
+
+  selectedBrandColor = null;
+  brandColorStatus.textContent = validation.suggestedColor
+    ? `${validation.error} Probá ${validation.suggestedColor}.`
+    : validation.error;
+});
+
+brandLogoInput.addEventListener("change", async () => {
+  const file = brandLogoInput.files?.[0];
+  if (!file) {
+    selectedBrandLogo = null;
+    brandLogoStatus.classList.remove("is-error");
+    brandLogoStatus.textContent =
+      "Formatos PNG, SVG o JPG; máximo 500 KB.";
+    return;
+  }
+
+  try {
+    const validation = validateBrandLogo(
+      file.name,
+      new Uint8Array(await file.arrayBuffer())
+    );
+    if (!validation.valid) {
+      selectedBrandLogo = null;
+      brandLogoInput.value = "";
+      brandLogoStatus.classList.add("is-error");
+      brandLogoStatus.textContent = validation.error;
+      return;
+    }
+
+    selectedBrandLogo = validation.logo;
+    brandLogoStatus.classList.remove("is-error");
+    brandLogoStatus.textContent =
+      `Logo listo: ${file.name} (${Math.ceil(file.size / 1024)} KB).`;
+  } catch (error) {
+    console.error(error);
+    selectedBrandLogo = null;
+    brandLogoInput.value = "";
+    brandLogoStatus.classList.add("is-error");
+    brandLogoStatus.textContent =
+      "No pudimos leer el logo. Elegí otro archivo e inténtalo de nuevo.";
+  }
+});
 
 approveButton.addEventListener("click", () => {
   if (!currentArticle) return;

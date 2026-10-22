@@ -71,6 +71,31 @@
           <button id="selectButton" class="button button-primary" type="button">
             Elegir documento Word
           </button>
+          <fieldset class="brand-settings">
+            <legend>Identidad de la revista</legend>
+            <label for="brandColor">Color del encabezado y pie de página</label>
+            <div class="brand-color-control">
+              <input
+                id="brandColor"
+                type="color"
+                value="#245b4b"
+                aria-describedby="brandColorStatus"
+              />
+              <span id="brandColorStatus" role="status" aria-live="polite">
+                El color elegido debe permitir leer texto blanco.
+              </span>
+            </div>
+            <label for="brandLogo">Logo de la revista (opcional)</label>
+            <input
+              id="brandLogo"
+              type="file"
+              accept=".png,.svg,.jpg,.jpeg,image/png,image/svg+xml,image/jpeg"
+              aria-describedby="brandLogoStatus"
+            />
+            <p id="brandLogoStatus" role="status" aria-live="polite">
+              Formatos PNG, SVG o JPG; máximo 500 KB.
+            </p>
+          </fieldset>
         </section>
 
         <section

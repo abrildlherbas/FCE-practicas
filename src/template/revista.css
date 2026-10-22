@@ -1,0 +1,143 @@
+:root {
+  --revista-color: {{magazine.color}};
+  --revista-logo-url: url("{{magazine.logoUrl}}");
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background-color: #fffefa;
+  color: #202522;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 1.0625rem;
+  line-height: 1.75;
+}
+
+.revista-columna {
+  width: min(100% - 3rem, 48rem);
+  margin-inline: auto;
+}
+
+.revista-header,
+.revista-footer {
+  width: 100%;
+  background-color: var(--revista-color);
+  color: #fff;
+  font-family: "Segoe UI", Arial, sans-serif;
+}
+
+.revista-header-contenido,
+.revista-footer-contenido {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  padding-block: 1.5rem;
+}
+
+.revista-logo {
+  flex: 0 0 8rem;
+  width: 8rem;
+  height: 6rem;
+  background-color: #fff;
+  background-image: var(--revista-logo-url);
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain;
+}
+
+.revista-identificacion p {
+  margin: 0;
+}
+
+.revista-nombre {
+  font-size: 1.4rem;
+  font-weight: 700;
+}
+
+.revista-institucion,
+.revista-edicion {
+  font-size: 0.95rem;
+}
+
+.revista-identidad ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.25rem;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.875rem;
+}
+
+.revista-header a,
+.revista-footer a {
+  color: #fff;
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+}
+
+.revista-header a:focus-visible,
+.revista-footer a:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 3px;
+}
+
+.revista-main {
+  min-height: 60vh;
+  background-color: #fffefa;
+  color: #202522;
+}
+
+.revista-articulo {
+  padding-block: clamp(2.5rem, 7vw, 5.5rem);
+}
+
+.revista-main a,
+.revista-nota-ref {
+  color: var(--revista-color);
+}
+
+.revista-main a:focus-visible,
+.revista-nota-ref:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 3px;
+}
+
+.revista-footer {
+  margin-top: 4rem;
+}
+
+.revista-footer-contenido {
+  flex-wrap: wrap;
+  justify-content: space-between;
+}
+
+.revista-datos-institucionales {
+  font-size: 0.875rem;
+  font-style: normal;
+}
+
+.revista-datos-institucionales p {
+  margin: 0.25rem 0;
+}
+
+.revista-licencia {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 0.8125rem;
+}
+
+@media (max-width: 36rem) {
+  .revista-columna {
+    width: min(100% - 2rem, 48rem);
+  }
+
+  .revista-header-contenido,
+  .revista-footer-contenido {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

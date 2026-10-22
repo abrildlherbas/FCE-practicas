@@ -6,6 +6,7 @@ import {
 import { describe, expect, it } from "vitest";
 
 import type { Article } from "../src/converter/models/Article";
+import { validateBrandLogo } from "../src/renderer-html/brand-logo";
 import { renderArticle } from "../src/renderer-html/renderArticle";
 
 function createArticle(): Article {
@@ -263,5 +264,44 @@ describe("renderArticle", () => {
     );
     expect(byId(second, "article-notes")).toBeDefined();
     expect(byId(second, "article-references")).toBeDefined();
+  });
+
+  it("aplica el color validado y embebe el logo en el HTML exportable", () => {
+    const logo = validateBrandLogo(
+      "revista.svg",
+      new TextEncoder().encode('<svg xmlns="http://www.w3.org/2000/svg"></svg>')
+    );
+    if (!logo.valid) throw new Error(logo.error);
+
+    const html = renderArticle(createArticle(), {
+      color: "#123A70",
+      logo: logo.logo,
+      magazineName: "Revista de prueba",
+    });
+    const document = parseHtml(html);
+    const logoDataUri = logo.logo.dataUri;
+
+    expect(html).toContain(`--revista-color: #123A70;`);
+    expect(html).toContain(`--revista-logo-url: url("${logoDataUri}");`);
+    expect(html).not.toContain('background-image: url("revista.svg")');
+    const logos = elements(document, "div").filter(
+      (element) => element.getAttribute("class") === "revista-logo"
+    );
+    expect(logos).toHaveLength(2);
+    expect(logos.map((element) => element.getAttribute("role"))).toEqual([
+      "img",
+      "img",
+    ]);
+    expect(logos[0].getAttribute("aria-label")).toBe(
+      "Logo de Revista de prueba"
+    );
+  });
+
+  it("rechaza un color de marca que no cumple el contraste", () => {
+    expect(() =>
+      renderArticle(createArticle(), { color: "#FFFF00" })
+    ).toThrow(
+      "Este color es muy claro y dificulta la lectura. Probá uno más oscuro."
+    );
   });
 });
