@@ -1,4 +1,4 @@
-export const headerRules = {
+﻿export const headerRules = {
   titleStylePatterns: [
     /^(?:title|titulo|t[ií]tulo)$/i,
   ],
@@ -7,7 +7,7 @@ export const headerRules = {
     /^(?:english\s+title|title\s+in\s+english)\s*:\s*(.+)$/i,
   ],
   paragraphJoining: {
-    enabled: true,
+    enabled: false,
     terminalPunctuation: /[.!?…:;]$/u,
     startsLowercase: /^\p{Ll}/u,
   },

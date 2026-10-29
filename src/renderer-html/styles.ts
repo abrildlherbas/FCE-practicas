@@ -1,4 +1,4 @@
-export const articleStyles = `
+﻿export const articleStyles = `
 :root {
   color-scheme: light;
   --article-paper: #fffefa;
@@ -60,9 +60,39 @@ a:focus-visible {
   padding-block: 1.25rem;
   color: #fff;
   font-size: 0.8125rem;
+}
+
+.journal-title {
+  font-size: 1.15rem;
   font-weight: 700;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+
+.journal-title a {
+  color: #fff;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.journal-institution {
+  margin-top: 0.25rem;
+  font-size: 0.85rem;
+  opacity: 0.95;
+}
+
+.journal-meta {
+  margin-top: 0.35rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  font-size: 0.8125rem;
+  opacity: 0.95;
+}
+
+.journal-meta a {
+  color: #fff;
+  text-decoration: underline;
 }
 
 .article-content {

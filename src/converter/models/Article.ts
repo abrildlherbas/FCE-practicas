@@ -1,4 +1,4 @@
-export interface Article {
+﻿export interface Article {
   document: {
     source: string;
     format: "doc" | "docx";
@@ -26,6 +26,15 @@ export interface Article {
       accepted?: string;
       published?: string;
     };
+
+    year?: string;
+    volume?: string;
+    issue?: string;
+    journalName?: string;
+    journalUrl?: string;
+    issn?: string;
+    eissn?: string;
+    institution?: string;
   };
 
   body: BodyBlock[];

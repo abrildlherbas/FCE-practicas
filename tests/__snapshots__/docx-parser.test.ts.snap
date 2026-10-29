@@ -6,6 +6,7 @@ exports[`DocxParser > parsea el DOCX de ejemplo y coincide con el snapshot JSON 
     {
       "runs": [
         {
+          "sizeHalfPoints": "22",
           "text": "Introducción",
           "type": "text",
         },
@@ -15,6 +16,7 @@ exports[`DocxParser > parsea el DOCX de ejemplo y coincide con el snapshot JSON 
     {
       "runs": [
         {
+          "sizeHalfPoints": "22",
           "text": "Contenido de la introducción.",
           "type": "text",
         },
@@ -24,6 +26,7 @@ exports[`DocxParser > parsea el DOCX de ejemplo y coincide con el snapshot JSON 
     {
       "runs": [
         {
+          "sizeHalfPoints": "22",
           "text": "x",
           "type": "text",
         },
@@ -33,6 +36,7 @@ exports[`DocxParser > parsea el DOCX de ejemplo y coincide con el snapshot JSON 
     {
       "runs": [
         {
+          "sizeHalfPoints": "22",
           "text": "y",
           "type": "text",
         },
@@ -42,6 +46,7 @@ exports[`DocxParser > parsea el DOCX de ejemplo y coincide con el snapshot JSON 
     {
       "runs": [
         {
+          "sizeHalfPoints": "22",
           "text": "z",
           "type": "text",
         },

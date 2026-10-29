@@ -1,4 +1,4 @@
-import { Article, ParseWarning } from "../models/Article";
+﻿import { Article, ParseWarning } from "../models/Article";
 import { headerRules } from "../config/header-rules";
 
 export interface HeaderParagraph {
@@ -346,8 +346,29 @@ export class HeaderExtractor {
       const doiMatch = matchPatterns(text, headerRules.doiPatterns);
       if (doiMatch) {
         header.doi = doiMatch[1].replace(/[.,;]+$/, "");
+        if (!header.year) {
+          const doiYear = header.doi.match(/\((20\d\d)\)/);
+          if (doiYear) header.year = doiYear[1];
+        }
+        if (!header.volume) {
+          const doiVol = header.doi.match(/Vol\.?([A-Za-z0-9]+)/i);
+          if (doiVol) header.volume = doiVol[1];
+        }
         consumedBlockIndexes.add(paragraph.blockIndex);
         continue;
+      }
+
+      const yearMatch = text.match(/(?:a[ñn]o|year)\s*[:.]?\s*(\d{4})/i) ?? text.match(/\b(20\d\d)\b/);
+      if (yearMatch && !header.year) {
+        header.year = yearMatch[1];
+      }
+      const numMatch = text.match(/(?:nro\.?|n[úu]mero|numero|no\.?|issue)\s*[:.]?\s*([A-Za-z0-9]+)/i);
+      if (numMatch && !header.issue) {
+        header.issue = numMatch[1];
+      }
+      const volMatch = text.match(/(?:volumen|vol\.?|volume)\s*[:.]?\s*([A-Za-z0-9]+)/i);
+      if (volMatch && !header.volume) {
+        header.volume = volMatch[1];
       }
 
       const orcidMatch = headerRules.orcidPattern.exec(text);

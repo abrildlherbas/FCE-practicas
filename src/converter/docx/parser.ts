@@ -1,4 +1,4 @@
-import path from "node:path";
+﻿import path from "node:path";
 import JSZip from "jszip";
 import { XMLParser } from "fast-xml-parser";
 
@@ -255,6 +255,31 @@ export class DocxParser {
       structure.body,
       [...footnotes, ...endnotes]
     );
+
+    const headerFiles = Object.keys(zip.files).filter((file) =>
+      /^word\/header\d+\.xml$/i.test(file)
+    );
+    let ooxmlHeaderText = "";
+    for (const hFile of headerFiles) {
+      const content = await this.readOptional(zip, hFile);
+      if (content) {
+        ooxmlHeaderText += " " + content.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
+      }
+    }
+    if (ooxmlHeaderText) {
+      if (!structure.header.year) {
+        const ym = ooxmlHeaderText.match(/(?:año|year)\s*[:.]?\s*(\d{4})/i) || ooxmlHeaderText.match(/\b(20\d\d)\b/);
+        if (ym) structure.header.year = ym[1];
+      }
+      if (!structure.header.volume) {
+        const vm = ooxmlHeaderText.match(/(?:volumen|vol\.?|volume)\s*[:.]?\s*([A-Za-z0-9]+)/i);
+        if (vm) structure.header.volume = vm[1];
+      }
+      if (!structure.header.issue) {
+        const nm = ooxmlHeaderText.match(/(?:nro\.?|número|numero|no\.?|issue)\s*[:.]?\s*([A-Za-z0-9]+)/i);
+        if (nm) structure.header.issue = nm[1];
+      }
+    }
 
     return {
       document: {
@@ -610,35 +635,7 @@ export class DocxParser {
       }
     }
 
-    for (const paragraph of paragraphs) {
-      const runs = collectXmlNodes(paragraph.xml, "w:r");
-      let searchStart = 0;
-
-      for (const run of runs) {
-        const runText = this.extractRunText(run);
-        if (!runText) continue;
-
-        if (!stylesResolver.resolveRunProps(paragraph.xml, run).sizeHalfPoints) {
-          const start = paragraph.text.indexOf(runText, searchStart);
-          warnings.push({
-            code: "unresolved-run-size",
-            message:
-              `No se pudo resolver el tamaño de fuente de este run. Texto: ${runText}`,
-            blockIndex: paragraph.blockIndex,
-            ...(start >= 0
-              ? {
-                  start,
-                  end: start + runText.length,
-                  affectedText: runText,
-                }
-              : {}),
-            status: "pendiente",
-          });
-        }
-        const runStart = paragraph.text.indexOf(runText, searchStart);
-        if (runStart >= 0) searchStart = runStart + runText.length;
-      }
-    }
+    
 
     return warnings;
   }
@@ -881,21 +878,8 @@ export class DocxParser {
         return;
       }
       if (name === "w:t") {
-        const textNode = asXmlRecord(record[name]);
-        const rawText = typeof record[name] === "string"
-          ? record[name] as string
-          : typeof textNode?.["#text"] === "string"
-            ? textNode["#text"] as string
-            : "";
+        const rawText = this.extractRunText(node);
         const normalized = normalizeVisibleText(rawText);
-        if (normalized.changed) {
-          context.warnings.push({
-            code: "text-normalized",
-            message: `Se normalizaron caracteres no estándar en el texto: ${rawText}`,
-            blockIndex,
-            status: "pendiente",
-          });
-        }
         appendText(normalized.text, run, hyperlink);
         return;
       }
