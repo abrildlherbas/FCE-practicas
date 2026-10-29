@@ -97,12 +97,38 @@ describe("CitationLinker", () => {
           code: "unmatched-citation",
           message: expect.stringContaining("Desconocido, 2019"),
           blockIndex: 0,
+          start: 1,
+          end: 18,
+          affectedText: "Desconocido, 2019",
         }),
         expect.objectContaining({
           code: "uncited-reference",
           message: expect.stringContaining("Smith, J. (2020)"),
         }),
       ])
+    );
+  });
+
+  it("mantiene offsets absolutos del bloque cuando la cita sigue a una nota", () => {
+    const result = new CitationLinker().link(
+      [{
+        type: "paragraph",
+        runs: [
+          { type: "text", text: "Texto " },
+          { type: "noteRef", noteId: 2, noteType: "footnote" },
+          { type: "text", text: " (Desconocido, 2019)" },
+        ],
+      }],
+      references.slice(0, 1)
+    );
+
+    expect(result.warnings).toContainEqual(
+      expect.objectContaining({
+        code: "unmatched-citation",
+        start: 9,
+        end: 26,
+        affectedText: "Desconocido, 2019",
+      })
     );
   });
 

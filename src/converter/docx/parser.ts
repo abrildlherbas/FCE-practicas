@@ -9,7 +9,8 @@ import {
   Note,
   InlineRun,
   ParseWarning,
-  Reference
+  Reference,
+  WarningState,
 } from "../models/Article";
 import { headerRules } from "../config/header-rules";
 
@@ -24,6 +25,7 @@ import { NoteDetector } from "./NoteDetector";
 import { StylesResolver } from "./StylesResolver";
 import { DocxBodyBlockExtractor } from "./DocxBodyBlockExtractor";
 import { CitationLinker } from "./CitationLinker";
+import { warningIdentity } from "../warningIdentity";
 
 interface RawParagraph {
   xml: any;
@@ -192,7 +194,7 @@ export class DocxParser {
   async parse(
     zip: JSZip,
     sourcePath: string,
-    previousWarnings: ParseWarning[] = []
+    previousWarnings: Array<ParseWarning | WarningState> = []
   ): Promise<Article> {
     const documentXml = await this.readRequired(
       zip,
@@ -277,7 +279,7 @@ export class DocxParser {
       blocksByBodyIndex: Map<number, BodyBlock[]>;
       warnings: ParseWarning[];
     },
-    previousWarnings: ParseWarning[]
+    previousWarnings: Array<ParseWarning | WarningState>
   ): ParsedStructure {
     const body = findElement(
       document,
@@ -340,6 +342,9 @@ export class DocxParser {
           message:
             `Texto previo al cuerpo que no se pudo clasificar: ${paragraph.text}`,
           blockIndex: paragraph.blockIndex,
+          start: 0,
+          end: paragraph.text.length,
+          affectedText: paragraph.text,
           status: "pendiente",
         });
       }
@@ -405,18 +410,38 @@ export class DocxParser {
       status: "pendiente" as const,
     }));
     const detectedWarnings = [...bodyWarnings, ...citationWarnings];
-    const resolvedWarningKeys = new Set(
-      previousWarnings
-        .filter((warning) => warning.status === "resuelto")
-        .map((warning) =>
-          this.warningKey(warning)
-        )
+    const previousById = new Map(
+      previousWarnings.map((warning) => {
+        const id =
+          "code" in warning
+            ? warning.id ?? warningIdentity(warning)
+            : warning.id;
+        return [id, warning] as const;
+      })
     );
-    const currentWarnings = detectedWarnings.map((warning) =>
-      resolvedWarningKeys.has(this.warningKey(warning))
-        ? { ...warning, status: "resuelto" as const }
-        : warning
+    let nextOrdinal = Math.max(
+      0,
+      ...previousWarnings.map((warning) =>
+        "ordinal" in warning ? warning.ordinal ?? 0 : 0
+      )
     );
+    const currentWarnings = detectedWarnings.map((warning) => {
+      const id = warningIdentity(warning);
+      const previous = previousById.get(id);
+      const ordinal =
+        previous && "ordinal" in previous && previous.ordinal
+          ? previous.ordinal
+          : ++nextOrdinal;
+      return {
+        ...warning,
+        id,
+        ordinal,
+        status:
+          previous?.status === "resuelto"
+            ? "resuelto" as const
+            : "pendiente" as const,
+      };
+    });
 
     return {
       header: headerExtraction.header,
@@ -424,10 +449,6 @@ export class DocxParser {
       references: noteDetection.references,
       warnings: currentWarnings,
     };
-  }
-
-  private warningKey(warning: ParseWarning): string {
-    return `${warning.code}\u0000${warning.blockId ?? ""}\u0000${warning.message}`;
   }
 
   private async readRequired(
@@ -581,6 +602,9 @@ export class DocxParser {
           message:
             `Este párrafo breve está entre otros dos párrafos breves; podría ser un fragmento de texto. Texto: ${paragraphs[index].text}`,
           blockIndex: paragraphs[index].blockIndex,
+          start: 0,
+          end: paragraphs[index].text.length,
+          affectedText: paragraphs[index].text,
           status: "pendiente",
         });
       }
@@ -588,20 +612,31 @@ export class DocxParser {
 
     for (const paragraph of paragraphs) {
       const runs = collectXmlNodes(paragraph.xml, "w:r");
+      let searchStart = 0;
 
       for (const run of runs) {
         const runText = this.extractRunText(run);
         if (!runText) continue;
 
         if (!stylesResolver.resolveRunProps(paragraph.xml, run).sizeHalfPoints) {
+          const start = paragraph.text.indexOf(runText, searchStart);
           warnings.push({
             code: "unresolved-run-size",
             message:
               `No se pudo resolver el tamaño de fuente de este run. Texto: ${runText}`,
             blockIndex: paragraph.blockIndex,
+            ...(start >= 0
+              ? {
+                  start,
+                  end: start + runText.length,
+                  affectedText: runText,
+                }
+              : {}),
             status: "pendiente",
           });
         }
+        const runStart = paragraph.text.indexOf(runText, searchStart);
+        if (runStart >= 0) searchStart = runStart + runText.length;
       }
     }
 

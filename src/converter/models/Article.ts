@@ -51,9 +51,20 @@ export interface ArticleAffiliation {
 export interface ParseWarning {
   code: string;
   message: string;
+  id?: string;
+  ordinal?: number;
   blockIndex?: number;
   blockId?: string;
+  start?: number;
+  end?: number;
+  affectedText?: string;
   status: "pendiente" | "resuelto";
+}
+
+export interface WarningState {
+  id: string;
+  ordinal: number;
+  status: ParseWarning["status"];
 }
 
 export interface Note {

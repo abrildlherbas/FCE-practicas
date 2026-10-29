@@ -120,6 +120,11 @@ describe("DocxParser", () => {
 
     expect(warning?.status).toBe("pendiente");
     expect(warning?.blockId).toBe("b-3");
+    expect(warning).toMatchObject({
+      start: 0,
+      end: 1,
+      affectedText: "y",
+    });
     expect(article.body[3]).toMatchObject({
       type: "paragraph",
       runs: [{ type: "text", text: "y" }],
@@ -135,14 +140,22 @@ describe("DocxParser", () => {
     const regenerated = await parser.parse(zip, fixturePath, [
       { ...warning!, status: "resuelto" },
     ]);
-    expect(
-      regenerated.warnings.find(
+    const regeneratedWarning = regenerated.warnings.find(
         ({ code, message, blockId }) =>
           code === warning?.code &&
           message === warning.message &&
           blockId === warning.blockId
+      );
+    expect(regeneratedWarning).toMatchObject({
+      id: warning?.id,
+      ordinal: warning?.ordinal,
+      status: "resuelto",
+    });
+    expect(
+      regenerated.warnings.find(
+        (candidate) => candidate.id !== warning?.id
       )?.status
-    ).toBe("resuelto");
+    ).toBe("pendiente");
   });
 
   it("conserva los metadatos bilingües, ORCID y afiliaciones del artículo real", async () => {

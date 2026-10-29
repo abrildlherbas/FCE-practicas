@@ -318,6 +318,10 @@ describe("renderArticle", () => {
 
   it("asigna ids de bloque estables entre renderizados del mismo artículo", () => {
     const article = createArticle();
+    article.body = Array.from({ length: 250 }, (_, index) => ({
+      type: "paragraph" as const,
+      runs: [{ type: "text" as const, text: `Bloque ${index}` }],
+    }));
     const first = parseHtml(renderArticle(article));
     const second = parseHtml(renderArticle(article));
     const blockIds = (document: XmlDocument): string[] =>
@@ -329,6 +333,8 @@ describe("renderArticle", () => {
       article.body.map((_, index) => `b-${index}`)
     );
     expect(blockIds(second)).toEqual(blockIds(first));
+    expect(blockIds(first)).toHaveLength(250);
+    expect(blockIds(first).at(-1)).toBe("b-249");
   });
 
   it("rechaza valores que no sean colores hexadecimales #RRGGBB", () => {

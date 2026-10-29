@@ -1,9 +1,14 @@
 import type { Article } from "../converter/models/Article";
 import { renderArticle } from "../renderer-html/renderArticle";
 import {
+  annotateWarningFragments,
+  clearWarningAnnotations,
+  filterWarnings,
   focusWarningBlock,
+  numberedWarnings,
   pendingWarnings,
-  resolveWarning,
+  warningCounts,
+  type WarningFilter,
 } from "./warning-review";
 
 function getElement<T extends HTMLElement>(selector: string): T {
@@ -42,6 +47,13 @@ const warningList = getElement<HTMLUListElement>("#warningList");
 const preview = getElement<HTMLIFrameElement>("#articlePreview");
 const pendingWarningCount =
   getElement<HTMLSpanElement>("#pendingWarningCount");
+const pendingWarningTabCount =
+  getElement<HTMLSpanElement>("#pendingWarningTabCount");
+const resolvedWarningCount =
+  getElement<HTMLSpanElement>("#resolvedWarningCount");
+const warningFilterButtons = Array.from(
+  document.querySelectorAll<HTMLButtonElement>("[data-warning-filter]")
+);
 const expandPreviewButton =
   getElement<HTMLButtonElement>("#expandPreviewButton");
 const editHtmlButton = getElement<HTMLButtonElement>("#editHtmlButton");
@@ -72,11 +84,8 @@ let isApproved = false;
 let isBusy = false;
 let hasManualEdits = false;
 let isPreviewEditing = false;
+let warningFilter: WarningFilter = "pendientes";
 let selectedBrandColor: string | null = null;
-const resolvedWarningsByFile = new Map<
-  string,
-  Article["warnings"]
->();
 
 const HEX_COLOR_PATTERN = /^#[0-9a-f]{6}$/i;
 if (HEX_COLOR_PATTERN.test(brandColorInput.value)) {
@@ -162,30 +171,58 @@ function friendlyWarning(code: string, message: string): string {
 
 function renderWarnings(article: Article): void {
   warningList.replaceChildren();
-  const warnings = pendingWarnings(article.warnings);
-  pendingWarningCount.textContent = String(warnings.length);
+  const allWarnings = numberedWarnings(article.warnings);
+  const { pending: pendingCount, resolved: resolvedCount } =
+    warningCounts(article.warnings);
+  pendingWarningCount.textContent = String(pendingCount);
+  pendingWarningTabCount.textContent = String(pendingCount);
   pendingWarningCount.setAttribute(
     "aria-label",
-    `${warnings.length} errores pendientes`
+    `${pendingCount} errores pendientes`
   );
-  if (warnings.length === 0) {
-    warningSummary.textContent = "No hay errores pendientes.";
-    const item = document.createElement("li");
-    item.className = "no-warnings";
-    item.textContent = "Todos los puntos están resueltos.";
-    warningList.append(item);
-    setStatus("pendiente");
-    return;
+  resolvedWarningCount.textContent = String(resolvedCount);
+  resolvedWarningCount.setAttribute(
+    "aria-label",
+    `${resolvedCount} errores resueltos`
+  );
+  warningSummary.textContent =
+    `Pendientes: ${pendingCount} · Resueltos: ${resolvedCount}`;
+  for (const button of warningFilterButtons) {
+    button.setAttribute(
+      "aria-pressed",
+      String(button.dataset.warningFilter === warningFilter)
+    );
   }
 
-  warningSummary.textContent =
-    warnings.length === 1
-      ? "Hay 1 error pendiente."
-      : `Hay ${warnings.length} errores pendientes.`;
-  for (const warning of warnings) {
+  const warnings = filterWarnings(allWarnings, warningFilter);
+  if (warnings.length === 0) {
     const item = document.createElement("li");
-    item.className = "warning-item";
+    item.className = "no-warnings";
+    item.textContent =
+      warningFilter === "pendientes"
+        ? "No hay errores pendientes."
+        : warningFilter === "resueltos"
+          ? "No hay errores resueltos."
+          : "No se encontraron errores.";
+    warningList.append(item);
+  } else {
+    for (const { warning, number } of warnings) {
+    const item = document.createElement("li");
+    item.className = `warning-item${warning.status === "resuelto" ? " is-resolved" : ""}`;
+    item.dataset.warningId = warning.id ?? "";
+    item.dataset.warningOrdinal = String(number);
+    const numberBadge = document.createElement("span");
+    numberBadge.className = "warning-number";
+    numberBadge.textContent = String(number);
+    numberBadge.setAttribute("aria-label", `Error ${number}`);
+    item.append(numberBadge);
     const description = friendlyWarning(warning.code, warning.message);
+
+    const status = document.createElement("span");
+    status.className = "warning-status";
+    status.textContent =
+      warning.status === "resuelto" ? "Resuelto" : "Pendiente";
+    item.append(status);
 
     const actions = document.createElement("div");
     actions.className = "warning-actions";
@@ -196,12 +233,12 @@ function renderWarnings(article: Article): void {
       targetButton.textContent = description;
       targetButton.addEventListener("click", () => {
         const block = preview.contentDocument
-          ? focusWarningBlock(preview.contentDocument, warning.blockId)
+          ? focusWarningBlock(preview.contentDocument, warning)
           : null;
-        if (block) {
-          preview.focus();
-        } else {
-          showMessage("No encontramos ese bloque en la vista previa.");
+        if (!block) {
+          showMessage(
+            "El bloque asociado a este error ya no está en la vista previa. Puede haber cambiado durante la edición manual."
+          );
         }
       });
       item.append(targetButton);
@@ -212,25 +249,57 @@ function renderWarnings(article: Article): void {
       item.append(details);
     }
 
-    const resolveButton = document.createElement("button");
-    resolveButton.type = "button";
-    resolveButton.className = "warning-resolve";
-    resolveButton.textContent = "Marcar como resuelto";
-    resolveButton.addEventListener("click", () => {
-      resolveWarning(article, warning);
-      const resolved = resolvedWarningsByFile.get(currentFilePath) ?? [];
-      resolvedWarningsByFile.set(
-        currentFilePath,
-        [...resolved.filter((item) => item.status === "resuelto"), warning]
+    const statusButton = document.createElement("button");
+    statusButton.type = "button";
+    statusButton.className =
+      warning.status === "resuelto" ? "warning-reopen" : "warning-resolve";
+    statusButton.textContent =
+      warning.status === "resuelto" ? "Reabrir" : "Marcar como resuelto";
+    statusButton.addEventListener("click", () => {
+      void updateWarningStatus(
+        article,
+        warning,
+        warning.status === "resuelto" ? "pendiente" : "resuelto"
       );
-      isApproved = false;
-      renderWarnings(article);
     });
-    actions.append(resolveButton);
+    actions.append(statusButton);
     item.append(actions);
     warningList.append(item);
+    }
   }
-  setStatus("con-advertencias");
+  setStatus(pendingCount ? "con-advertencias" : "pendiente");
+}
+
+async function updateWarningStatus(
+  article: Article,
+  warning: Article["warnings"][number],
+  status: Article["warnings"][number]["status"]
+): Promise<void> {
+  const previousStatus = warning.status;
+  warning.status = status;
+  try {
+    await window.electronAPI.saveWarningStates(
+      currentFilePath,
+      article.warnings
+    );
+  } catch (error) {
+    warning.status = previousStatus;
+    console.error(error);
+    showMessage(
+      "No pudimos guardar el estado del error. Comprueba los permisos del documento e inténtalo otra vez."
+    );
+    renderWarnings(article);
+    return;
+  }
+
+  isApproved = false;
+  renderWarnings(article);
+  if (isPreviewEditing && preview.contentDocument) {
+    annotateWarningFragments(
+      preview.contentDocument,
+      filterWarnings(numberedWarnings(article.warnings), "pendientes")
+    );
+  }
 }
 
 function setBusy(busy: boolean): void {
@@ -322,17 +391,14 @@ async function chooseAndPrepareDocument(): Promise<void> {
   }
 
   try {
-    const previousWarnings = resolvedWarningsByFile.get(filePath) ?? [];
-    const article = await window.electronAPI.convertDocument(
-      filePath,
-      previousWarnings
-    );
+    const article = await window.electronAPI.convertDocument(filePath);
     const html = renderArticle(article, {
       color: selectedBrandColor,
     });
     const previewHtml = await window.electronAPI.preparePreview(html);
 
     currentArticle = article;
+    warningFilter = "pendientes";
     currentHtml = html;
     currentExportHtml = previewHtml;
     fileName.textContent = filePath.split(/[\\/]/).pop() ?? "Documento Word";
@@ -358,6 +424,21 @@ selectButton.addEventListener("click", chooseAndPrepareDocument);
 changeDocumentButton.addEventListener("click", chooseAndPrepareDocument);
 newDocumentButton.addEventListener("click", resetToStart);
 
+for (const button of warningFilterButtons) {
+  button.addEventListener("click", () => {
+    const filter = button.dataset.warningFilter;
+    if (
+      filter !== "todos" &&
+      filter !== "pendientes" &&
+      filter !== "resueltos"
+    ) {
+      return;
+    }
+    warningFilter = filter;
+    if (currentArticle) renderWarnings(currentArticle);
+  });
+}
+
 expandPreviewButton.addEventListener("click", () => {
   const expanded = preview.classList.toggle("is-expanded");
   expandPreviewButton.textContent = expanded
@@ -372,6 +453,15 @@ editHtmlButton.addEventListener("click", () => {
     return;
   }
 
+  if (currentArticle) {
+    annotateWarningFragments(
+      previewDocument,
+      filterWarnings(
+        numberedWarnings(currentArticle.warnings),
+        "pendientes"
+      )
+    );
+  }
   isPreviewEditing = true;
   previewDocument.designMode = "on";
   preview.classList.add("is-editing", "is-expanded");
@@ -392,10 +482,7 @@ saveHtmlEditButton.addEventListener("click", async () => {
     return;
   }
   previewDocument.designMode = "off";
-  previewDocument
-    .querySelectorAll(".warning-highlight")
-    .forEach((element) => element.classList.remove("warning-highlight"));
-  previewDocument.getElementById("warning-highlight-style")?.remove();
+  clearWarningAnnotations(previewDocument);
   const doctype = previewDocument.doctype ? "<!doctype html>\n" : "";
   currentHtml = `${doctype}${previewDocument.documentElement.outerHTML}`;
   currentExportHtml = currentHtml;

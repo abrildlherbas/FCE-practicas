@@ -5,6 +5,10 @@ import path from "node:path";
 import { DocxReader } from "../converter/docx/reader";
 import { DocxParser } from "../converter/docx/parser";
 import type { ParseWarning } from "../converter/models/Article";
+import {
+  persistWarningStates,
+  readWarningStates,
+} from "./warning-state-storage";
 
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string | undefined;
 declare const MAIN_WINDOW_VITE_NAME: string;
@@ -120,7 +124,15 @@ ipcMain.handle("select-document", async () => {
 
 ipcMain.handle(
   "convert-document",
-  async (_event, filePath: string, previousWarnings: unknown) => {
+  async (_event, filePath: unknown) => {
+    if (
+      typeof filePath !== "string" ||
+      !selectedDocumentPath ||
+      path.resolve(filePath) !== path.resolve(selectedDocumentPath)
+    ) {
+      throw new Error("El documento seleccionado ya no está disponible.");
+    }
+
     const extension = path.extname(filePath).toLowerCase();
 
     if (extension !== ".docx") {
@@ -134,20 +146,48 @@ ipcMain.handle(
 
     const zip = await reader.open(filePath);
 
-    const warnings = Array.isArray(previousWarnings)
-      ? previousWarnings.filter(
-          (warning): warning is ParseWarning =>
-            typeof warning === "object" &&
-            warning !== null &&
-            "status" in warning &&
-            warning.status === "resuelto" &&
-            "code" in warning &&
-            typeof warning.code === "string" &&
-            "message" in warning &&
-            typeof warning.message === "string"
-        )
-      : [];
-    return parser.parse(zip, filePath, warnings);
+    const warningStates = await readWarningStates(filePath);
+    const article = await parser.parse(zip, filePath, warningStates);
+    await persistWarningStates(filePath, article.warnings);
+    return article;
+  }
+);
+
+ipcMain.handle(
+  "save-warning-states",
+  async (_event, filePath: unknown, warningValues: unknown) => {
+    if (
+      typeof filePath !== "string" ||
+      !selectedDocumentPath ||
+      path.resolve(filePath) !== path.resolve(selectedDocumentPath)
+    ) {
+      throw new Error("El documento seleccionado ya no está disponible.");
+    }
+    if (!Array.isArray(warningValues)) {
+      throw new Error("No se pudieron guardar los estados de los errores.");
+    }
+
+    const warnings = warningValues.filter(
+      (warning): warning is ParseWarning =>
+        typeof warning === "object" &&
+        warning !== null &&
+        "id" in warning &&
+        typeof warning.id === "string" &&
+        "ordinal" in warning &&
+        typeof warning.ordinal === "number" &&
+        Number.isInteger(warning.ordinal) &&
+        "status" in warning &&
+        (warning.status === "pendiente" ||
+          warning.status === "resuelto") &&
+        "code" in warning &&
+        typeof warning.code === "string" &&
+        "message" in warning &&
+        typeof warning.message === "string"
+    );
+    if (warnings.length !== warningValues.length) {
+      throw new Error("No se pudieron guardar los estados de los errores.");
+    }
+    await persistWarningStates(filePath, warnings);
   }
 );
 

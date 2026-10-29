@@ -117,6 +117,9 @@ export class NoteDetector {
           message:
             `La entrada de referencias se conserva como texto, pero no se pudieron reconocer autor y año. Texto: ${raw}`,
           blockIndex: paragraph.blockIndex,
+          start: 0,
+          end: paragraph.text.length,
+          affectedText: paragraph.text,
           status: "pendiente",
         });
       }
@@ -163,6 +166,9 @@ export class NoteDetector {
                 message:
                   `El párrafo tiene un posible marcador de nota, pero no se pudo confirmar que su tamaño sea menor al del cuerpo. Texto: ${text}`,
                 blockIndex: paragraph.blockIndex,
+                start: 0,
+                end: paragraph.text.length,
+                affectedText: paragraph.text,
                 status: "pendiente",
               });
             }
@@ -202,6 +208,9 @@ export class NoteDetector {
               message:
                 `El párrafo tiene texto en superíndice y tamaño menor al cuerpo, pero no se pudo identificar su marcador de nota. Texto: ${text}`,
               blockIndex: paragraph.blockIndex,
+              start: 0,
+              end: paragraph.text.length,
+              affectedText: paragraph.text,
               status: "pendiente",
             });
           }

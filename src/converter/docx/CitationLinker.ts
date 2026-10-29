@@ -137,6 +137,7 @@ function makeMatch(
   end: number,
   authorText: string,
   year: string,
+  affectedText: string,
   references: Reference[],
   blockIndex: number
 ): Match {
@@ -160,6 +161,9 @@ function makeMatch(
         ? `La cita coincide con más de una referencia y quedó sin enlazar: ${text}`
         : `No se encontró una referencia para la cita y quedó sin enlazar: ${text}`,
       blockIndex,
+      start,
+      end,
+      affectedText,
       status: "pendiente",
     },
   };
@@ -201,6 +205,9 @@ function citationMatches(
               code: "ambiguous-citation",
               message: `No se pudo identificar con seguridad el autor de la cita: ${trimmed}`,
               blockIndex,
+              start: groupStart + offset + leadingWhitespace,
+              end: groupStart + offset + leadingWhitespace + trimmed.length,
+              affectedText: trimmed,
               status: "pendiente",
             },
           });
@@ -212,6 +219,7 @@ function citationMatches(
           authorStart + trimmed.length,
           segment[1],
           segment[2],
+          trimmed,
           references,
           blockIndex
         ));
@@ -244,6 +252,7 @@ function citationMatches(
       end,
       authorText,
       year,
+      text.slice(start, end),
       references,
       blockIndex
     );
@@ -267,6 +276,7 @@ export class CitationLinker {
 
       const output: InlineRun[] = [];
       let textGroup: Extract<InlineRun, { type: "text" }>[] = [];
+      let blockTextOffset = 0;
 
       const flushTextGroup = (): void => {
         if (!textGroup.length) return;
@@ -297,7 +307,13 @@ export class CitationLinker {
         for (const match of matches) {
           if (match.start < cursor || match.end <= match.start) continue;
           appendText(cursor, match.start);
-          if (match.warning) warnings.push(match.warning);
+          if (match.warning) {
+            warnings.push({
+              ...match.warning,
+              start: blockTextOffset + match.warning.start!,
+              end: blockTextOffset + match.warning.end!,
+            });
+          }
           if (match.reference) {
             const referenceNumber = Number(
               match.reference.id.match(/(\d+)$/)?.[1] ?? 0
@@ -327,6 +343,7 @@ export class CitationLinker {
         }
         appendText(cursor, text.length);
         textGroup = [];
+        blockTextOffset += text.length;
       };
 
       for (const run of block.runs) {
@@ -374,6 +391,9 @@ export class CitationLinker {
             }
           } else {
             output.push(run);
+            blockTextOffset += run.type === "noteRef"
+              ? String(run.noteId).length
+              : run.text.length;
           }
         }
       }

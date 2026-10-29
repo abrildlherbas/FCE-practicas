@@ -140,10 +140,25 @@
               <div class="section-heading">
                 <h3 id="warnings-title">
                   <button id="warningsTab" class="warnings-tab" type="button" role="tab" aria-selected="true" aria-controls="warningList">
-                    Errores <span id="pendingWarningCount" class="warning-count">0</span>
+                    Errores <span id="pendingWarningTabCount" class="warning-count">0</span>
                   </button>
                 </h3>
                 <p id="warningSummary" role="status" aria-live="polite"></p>
+                <p class="warning-count-summary">
+                  Pendientes: <span id="pendingWarningCount">0</span> ·
+                  Resueltos: <span id="resolvedWarningCount">0</span>
+                </p>
+              </div>
+              <div class="warning-filters" role="group" aria-label="Filtrar errores">
+                <button type="button" data-warning-filter="pendientes" aria-pressed="true">
+                  Pendientes
+                </button>
+                <button type="button" data-warning-filter="resueltos" aria-pressed="false">
+                  Resueltos
+                </button>
+                <button type="button" data-warning-filter="todos" aria-pressed="false">
+                  Todos
+                </button>
               </div>
               <ul id="warningList" class="warning-list" role="tabpanel" aria-labelledby="warningsTab" aria-live="polite"></ul>
             </aside>

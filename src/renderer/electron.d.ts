@@ -7,10 +7,12 @@ declare global {
     electronAPI: {
       selectDocument(): Promise<string | null>;
 
-      convertDocument(
+      convertDocument(filePath: string): Promise<Article>;
+
+      saveWarningStates(
         filePath: string,
-        previousWarnings?: ParseWarning[]
-      ): Promise<Article>;
+        warnings: ParseWarning[]
+      ): Promise<void>;
 
       preparePreview(html: string): Promise<string>;
 
