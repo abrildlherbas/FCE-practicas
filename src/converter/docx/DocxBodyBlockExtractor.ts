@@ -44,6 +44,12 @@ function bodyContentElements(body: XmlElement): XmlElement[] {
     for (const child of children) {
       if (
         child.namespaceURI === WORD_NS &&
+        child.localName === "del"
+      ) {
+        continue;
+      }
+      if (
+        child.namespaceURI === WORD_NS &&
         child.localName === "sdt"
       ) {
         const content = childElements(child).find(
@@ -52,6 +58,24 @@ function bodyContentElements(body: XmlElement): XmlElement[] {
             element.localName === "sdtContent"
         );
         if (content) visit(childElements(content));
+        continue;
+      }
+      if (
+        child.namespaceURI === WORD_NS &&
+        child.localName === "ins"
+      ) {
+        visit(childElements(child));
+        continue;
+      }
+      if (
+        child.localName === "AlternateContent" &&
+        child.namespaceURI === "http://schemas.openxmlformats.org/markup-compatibility/2006"
+      ) {
+        const branches = childElements(child);
+        const choice = branches.find(
+          (branch) => branch.localName === "Choice"
+        ) ?? branches.find((branch) => branch.localName === "Fallback");
+        if (choice) visit(childElements(choice));
         continue;
       }
       elements.push(child);
@@ -68,6 +92,23 @@ function descendants(
   const results: XmlElement[] = [];
 
   for (const child of childElements(element)) {
+    if (
+      child.namespaceURI === WORD_NS &&
+      child.localName === "del"
+    ) {
+      continue;
+    }
+    if (
+      child.localName === "AlternateContent" &&
+      child.namespaceURI === "http://schemas.openxmlformats.org/markup-compatibility/2006"
+    ) {
+      const branches = childElements(child);
+      const choice = branches.find(
+        (branch) => branch.localName === "Choice"
+      ) ?? branches.find((branch) => branch.localName === "Fallback");
+      if (choice) results.push(...descendants(choice, localName));
+      continue;
+    }
     if (child.localName === localName) {
       results.push(child);
     }
@@ -92,9 +133,72 @@ function tableCellText(cell: XmlElement): string {
         element.namespaceURI === WORD_NS &&
         element.localName === "p"
     )
-    .map((paragraph) => paragraph.textContent ?? "")
+    .map((paragraph) => visibleText(paragraph))
     .join("\n")
     .trim();
+}
+
+function visibleText(element: XmlElement): string {
+  const parts: string[] = [];
+  const visit = (node: XmlNode): void => {
+    if (node.nodeType === 3 || node.nodeType === 4) {
+      parts.push(node.nodeValue ?? "");
+      return;
+    }
+    if (isElement(node)) {
+      if (
+        node.namespaceURI === WORD_NS &&
+        ["del", "delText", "instrText"].includes(node.localName)
+      ) return;
+      if (
+        node.localName === "AlternateContent" &&
+        node.namespaceURI === "http://schemas.openxmlformats.org/markup-compatibility/2006"
+      ) {
+        const branches = childElements(node);
+        const choice = branches.find(
+          (branch) => branch.localName === "Choice"
+        ) ?? branches.find((branch) => branch.localName === "Fallback");
+        if (choice) visit(choice);
+        return;
+      }
+      if (node.namespaceURI === WORD_NS && node.localName === "tab") {
+        parts.push(" ");
+        return;
+      }
+      if (node.namespaceURI === WORD_NS && node.localName === "br") {
+        parts.push("\n");
+        return;
+      }
+      if (node.namespaceURI === WORD_NS && node.localName === "noBreakHyphen") {
+        parts.push("-");
+        return;
+      }
+      if (
+        node.namespaceURI === WORD_NS &&
+        node.localName === "softHyphen"
+      ) return;
+      if (node.namespaceURI === WORD_NS && node.localName === "sym") {
+        const code = Number.parseInt(
+          node.getAttributeNS(WORD_NS, "char"),
+          16
+        );
+        if (
+          Number.isInteger(code) &&
+          code > 0 &&
+          code <= 0x10ffff &&
+          !(code >= 0xd800 && code <= 0xdfff)
+        ) {
+          parts.push(String.fromCodePoint(code));
+        }
+        return;
+      }
+    }
+    for (let child = node.firstChild; child; child = child.nextSibling) {
+      visit(child);
+    }
+  };
+  visit(element);
+  return parts.join("");
 }
 
 function isHeaderRow(row: XmlElement): boolean {
@@ -138,9 +242,23 @@ function convertTable(table: XmlElement): TableBlock {
     0,
     ...headerCellRows.map((cells) => cells.length)
   );
+  const tableProperties = childElements(table).find(
+    (element) =>
+      element.namespaceURI === WORD_NS &&
+      element.localName === "tblPr"
+  );
+  const captionElement = tableProperties
+    ? childElements(tableProperties).find(
+        (element) =>
+          element.namespaceURI === WORD_NS &&
+          element.localName === "tblCaption"
+      )
+    : undefined;
+  const caption = captionElement?.getAttributeNS(WORD_NS, "val")?.trim();
 
   return {
     type: "table",
+    ...(caption ? { caption } : {}),
     headers: Array.from(
       { length: headerColumnCount },
       (_, columnIndex) =>
@@ -216,6 +334,14 @@ function getImageAlt(container: XmlElement): string | undefined {
   return undefined;
 }
 
+function getImageCaption(container: XmlElement): string | undefined {
+  const caption = descendants(container, "caption").find(
+    (element) => element.namespaceURI === WORD_NS
+  );
+  const text = caption?.textContent?.trim();
+  return text || undefined;
+}
+
 function toZipPath(target: string): string {
   const packagePath = target.startsWith("/")
     ? target.slice(1)
@@ -273,6 +399,17 @@ export class DocxBodyBlockExtractor {
       ) {
         blocks.push(convertTable(element));
       }
+      for (const textBox of descendants(element, "txbxContent")) {
+        for (const paragraph of descendants(textBox, "p")) {
+          const text = visibleText(paragraph).trim();
+          if (text) {
+            blocks.push({
+              type: "paragraph",
+              runs: [{ type: "text", text }],
+            });
+          }
+        }
+      }
 
       const imageContainers = descendants(element, "drawing").concat(
         descendants(element, "pict")
@@ -280,6 +417,7 @@ export class DocxBodyBlockExtractor {
       for (const container of imageContainers) {
         const imageIds = getImageIds(container);
         const alt = getImageAlt(container);
+        const caption = getImageCaption(container);
         if (imageIds.length === 0) {
           warnings.push({
             code: "unrecognized-image",
@@ -333,6 +471,7 @@ export class DocxBodyBlockExtractor {
             rId,
             fileName,
             ...(alt ? { alt } : {}),
+            ...(caption ? { caption } : {}),
           };
           blocks.push(imageBlock);
 

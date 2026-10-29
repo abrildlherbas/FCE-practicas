@@ -74,16 +74,46 @@ export interface Reference {
   year?: number;
 }
 
+export interface CitationMetadata {
+  authors?: string[];
+  year?: number;
+  title?: string;
+}
+
 export type InlineRun =
-  | { type: "text"; text: string; bold?: boolean; italic?: boolean }
+  | {
+      type: "text";
+      text: string;
+      bold?: boolean;
+      italic?: boolean;
+      sizeHalfPoints?: string;
+    }
+  | {
+      type: "link";
+      text: string;
+      href: string;
+      bold?: boolean;
+      italic?: boolean;
+      sizeHalfPoints?: string;
+    }
+  | {
+      type: "fieldCitation";
+      text: string;
+      metadata?: CitationMetadata;
+      bold?: boolean;
+      italic?: boolean;
+      sizeHalfPoints?: string;
+    }
   | { type: "noteRef"; noteId: number; noteType: "footnote" | "endnote" }
   | {
       type: "citation";
       text: string;
       referenceId: string;
       citationId: string;
+      metadata?: CitationMetadata;
       bold?: boolean;
       italic?: boolean;
+      sizeHalfPoints?: string;
     };
 
 export interface HeadingBlock {
@@ -99,6 +129,7 @@ export interface ParagraphBlock {
 
 export interface TableBlock {
   type: "table";
+  caption?: string;
   headers: string[];
   rows: string[][];
 }
@@ -108,6 +139,7 @@ export interface ImageBlock {
   rId: string;
   fileName: string;
   alt?: string;
+  caption?: string;
 }
 
 export type BodyBlock =

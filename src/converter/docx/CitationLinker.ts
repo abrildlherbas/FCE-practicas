@@ -1,6 +1,7 @@
 import { citationRules } from "../config/citation-rules";
 import type {
   BodyBlock,
+  CitationMetadata,
   InlineRun,
   ParseWarning,
   Reference,
@@ -94,6 +95,41 @@ function matchesReference(
       return true;
     });
   });
+}
+
+function matchesCitationMetadata(
+  metadata: CitationMetadata | undefined,
+  references: Reference[]
+): Reference[] {
+  if (!metadata) return [];
+  let candidates = references;
+  if (metadata.year !== undefined) {
+    candidates = candidates.filter(
+      (reference) => referenceYear(reference) === String(metadata.year)
+    );
+  }
+  if (metadata.authors?.length) {
+    candidates = candidates.filter((reference) => {
+      if (metadata.year !== undefined) {
+        return matchesReference(metadata.authors!, String(metadata.year), [
+          reference,
+        ]).length === 1;
+      }
+      const authorText = normalized(
+        (reference.authors ?? [reference.raw])[0] ?? reference.raw
+      );
+      return metadata.authors!.every((author) =>
+        authorText.includes(normalized(firstSurname(author)))
+      );
+    });
+  }
+  if (metadata.title) {
+    const title = normalized(metadata.title);
+    candidates = candidates.filter((reference) =>
+      normalized(reference.raw).includes(title)
+    );
+  }
+  return candidates;
 }
 
 function makeMatch(
@@ -298,7 +334,47 @@ export class CitationLinker {
           textGroup.push(run);
         } else {
           flushTextGroup();
-          output.push(run);
+          if (run.type === "fieldCitation") {
+            const candidates = matchesCitationMetadata(
+              run.metadata,
+              references
+            );
+            if (candidates.length === 1) {
+              const reference = candidates[0];
+              const referenceNumber = Number(
+                reference.id.match(/(\d+)$/)?.[1] ?? 0
+              );
+              const occurrence =
+                (citationCounts.get(reference.id) ?? 0) + 1;
+              citationCounts.set(reference.id, occurrence);
+              citedReferences.add(reference.id);
+              output.push({
+                type: "citation",
+                text: run.text,
+                referenceId: reference.id,
+                citationId: `revista-cita-${referenceNumber}-${occurrence}`,
+                metadata: run.metadata,
+                bold: run.bold,
+                italic: run.italic,
+              });
+            } else {
+              output.push(run);
+              if (run.metadata) {
+                warnings.push({
+                  code: candidates.length > 1
+                    ? "ambiguous-citation"
+                    : "unmatched-citation",
+                  message: candidates.length > 1
+                    ? `Los metadatos de la cita coinciden con más de una referencia: ${run.text}`
+                    : `No se encontró una referencia para los metadatos de la cita: ${run.text}`,
+                  blockIndex,
+                  status: "pendiente",
+                });
+              }
+            }
+          } else {
+            output.push(run);
+          }
         }
       }
       flushTextGroup();

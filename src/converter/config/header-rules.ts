@@ -3,6 +3,17 @@ export const headerRules = {
     /^(?:title|titulo|t[ií]tulo)$/i,
   ],
   titleMinimumSizeHalfPoints: 28,
+  titleEnglishPatterns: [
+    /^(?:english\s+title|title\s+in\s+english)\s*:\s*(.+)$/i,
+  ],
+  paragraphJoining: {
+    enabled: true,
+    terminalPunctuation: /[.!?…:;]$/u,
+    startsLowercase: /^\p{Ll}/u,
+  },
+  layoutFieldStylePatterns: [
+    /^(?:toc|toc\d+|tableofcontents|indice|índice|header|footer)$/i,
+  ],
   maxHeaderBlocks: 40,
   bodyHeadingPatterns: [
     /^(?:\d+(?:\.\d+)*\.?\s*)?(?:introducci[oó]n|metodolog[ií]a|marco te[oó]rico|resultados|discusi[oó]n|conclusiones|referencias bibliogr[aá]ficas)$/i,

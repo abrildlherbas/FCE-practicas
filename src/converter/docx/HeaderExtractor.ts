@@ -181,6 +181,16 @@ export class HeaderExtractor {
       for (let index = titleIndex + 1; index < candidates.length; index++) {
         const paragraph = candidates[index];
         const size = sizeValue(paragraph.sizeHalfPoints);
+        const englishTitleMatch = matchPatterns(
+          normalizeText(paragraph.text),
+          headerRules.titleEnglishPatterns
+        );
+        if (englishTitleMatch) {
+          header.title_en = normalizeText(englishTitleMatch[1]);
+          capturedEnglishTitle = true;
+          consumedBlockIndexes.add(paragraph.blockIndex);
+          continue;
+        }
         if (
           size !== null &&
           size >= headerRules.titleMinimumSizeHalfPoints &&

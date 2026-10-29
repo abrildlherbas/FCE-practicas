@@ -5,11 +5,13 @@ import { XMLParser } from "fast-xml-parser";
 import {
   Article,
   BodyBlock,
+  CitationMetadata,
   Note,
   InlineRun,
   ParseWarning,
   Reference
 } from "../models/Article";
+import { headerRules } from "../config/header-rules";
 
 import {
   findElement,
@@ -44,6 +46,18 @@ interface ParsedStructure {
 interface ExtractedMainBody {
   blocks: BodyBlock[];
   sourceBlockIndexes: number[];
+}
+
+interface FieldState {
+  instruction: string;
+  separated: boolean;
+  discarded: boolean;
+}
+
+interface ParseContext {
+  fields: FieldState[];
+  warnings: ParseWarning[];
+  hyperlinkTargets: Map<string, string>;
 }
 
 type XmlRecord = Record<string, unknown>;
@@ -99,6 +113,72 @@ function collectXmlNodes(
   return results;
 }
 
+function getXmlAttribute(node: unknown, name: string): string | null {
+  const record = asXmlRecord(node);
+  const attributes = asXmlRecord(record?.[":@"]);
+  const value = attributes?.[`@_${name}`];
+  return value === undefined ? null : String(value);
+}
+
+function citationMetadata(instruction: string): CitationMetadata | undefined {
+  if (!/\b(?:ZOTERO_ITEM|MENDELEY)\b/i.test(instruction)) return undefined;
+  const jsonStart = instruction.indexOf("{");
+  const jsonEnd = instruction.lastIndexOf("}");
+  if (jsonStart < 0 || jsonEnd <= jsonStart) return undefined;
+
+  let value: unknown;
+  try {
+    value = JSON.parse(instruction.slice(jsonStart, jsonEnd + 1));
+  } catch {
+    return undefined;
+  }
+  const root = asXmlRecord(value);
+  const items = Array.isArray(root?.citationItems)
+    ? root.citationItems
+    : [];
+  const item = asXmlRecord(asXmlRecord(items[0])?.itemData) ??
+    asXmlRecord(items[0]) ??
+    root;
+  if (!item) return undefined;
+
+  const authorValues = Array.isArray(item.author) ? item.author : [];
+  const authors = authorValues
+    .map((author) => {
+      const authorRecord = asXmlRecord(author);
+      return String(
+        authorRecord?.family ??
+          authorRecord?.literal ??
+          ""
+      ).trim();
+    })
+    .filter(Boolean);
+  const issued = asXmlRecord(item.issued);
+  const firstDate = Array.isArray(issued?.["date-parts"])
+    ? issued["date-parts"][0]
+    : null;
+  const yearValue = Array.isArray(firstDate) ? firstDate[0] : null;
+  const year = Number(yearValue);
+  const title = typeof item.title === "string" ? item.title.trim() : "";
+  const metadata: CitationMetadata = {
+    ...(authors.length ? { authors } : {}),
+    ...(Number.isInteger(year) && year > 0 ? { year } : {}),
+    ...(title ? { title } : {}),
+  };
+  return Object.keys(metadata).length ? metadata : undefined;
+}
+
+function normalizeVisibleText(text: string): {
+  text: string;
+  changed: boolean;
+} {
+  const normalized = text
+    .replace(/[\u00a0\u1680\u2000-\u200a\u202f\u205f\u3000]/gu, " ")
+    .replace(/[\u200b\u200c\u200d\u2060\ufeff]/gu, "")
+    .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/gu, "\ufffd")
+    .replace(/\ud800(?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/gu, "\ufffd");
+  return { text: normalized, changed: normalized !== text };
+}
+
 export class DocxParser {
   private xmlParser = new XMLParser({
     ignoreAttributes: false,
@@ -136,6 +216,11 @@ export class DocxParser {
       zip,
       "word/_rels/document.xml.rels"
     );
+    const parseContext: ParseContext = {
+      fields: [],
+      warnings: [],
+      hyperlinkTargets: this.readHyperlinkTargets(relationshipsXml),
+    };
 
     const document = this.xmlParser.parse(documentXml);
     const stylesResolver = new StylesResolver(stylesXml);
@@ -158,6 +243,7 @@ export class DocxParser {
     const structure = this.parseDocumentStructure(
       document,
       stylesResolver,
+      parseContext,
       [...footnotes, ...endnotes],
       extractedBlocks,
       previousWarnings
@@ -185,6 +271,7 @@ export class DocxParser {
   private parseDocumentStructure(
     document: any,
     stylesResolver: StylesResolver,
+    parseContext: ParseContext,
     nativeNotes: Note[],
     extractedBlocks: {
       blocksByBodyIndex: Map<number, BodyBlock[]>;
@@ -210,7 +297,7 @@ export class DocxParser {
     }
 
     const rawParagraphs =
-      this.extractBodyParagraphs(body, stylesResolver);
+      this.extractBodyParagraphs(body, stylesResolver, parseContext);
     const headerExtraction = new HeaderExtractor().extract(
       rawParagraphs.map((paragraph) => ({
         blockIndex: paragraph.blockIndex,
@@ -280,8 +367,10 @@ export class DocxParser {
         headerExtraction.consumedBlockIndexes,
         noteDetection.consumedNoteBlockIndexes,
         noteDetection.referenceHeadingBlockIndex,
-        extractedBlocks.blocksByBodyIndex
+        extractedBlocks.blocksByBodyIndex,
+        parseContext
       );
+      warnings.push(...parseContext.warnings);
     const citationLinking = new CitationLinker().link(
       extractedMainBody.blocks,
       noteDetection.references
@@ -369,7 +458,8 @@ export class DocxParser {
 
   private extractBodyParagraphs(
     body: any,
-    stylesResolver: StylesResolver
+    stylesResolver: StylesResolver,
+    parseContext: ParseContext
   ): RawParagraph[] {
     const bodyElements = this.bodyContentElements(body);
     const paragraphElements = bodyElements
@@ -377,7 +467,14 @@ export class DocxParser {
 
     return paragraphElements.map(
       ({ node: paragraph, blockIndex }): RawParagraph => {
-        const runs = this.parseRuns(paragraph, stylesResolver);
+        const styleId = stylesResolver.getParagraphStyleId(paragraph);
+        const runs = this.parseRuns(
+          paragraph,
+          stylesResolver,
+          parseContext,
+          blockIndex,
+          styleId
+        );
         const firstRun =
           collectXmlNodes(paragraph, "w:r")[0] ?? null;
         const firstRunSize = firstRun
@@ -397,8 +494,7 @@ export class DocxParser {
           text: this.extractParagraphText(paragraph),
           headingLevel: this.getHeadingLevel(paragraph),
           blockIndex,
-          styleId:
-            stylesResolver.getParagraphStyleId(paragraph),
+          styleId,
           sizeHalfPoints: firstRunSize,
           hasSuperscriptPrefix:
             firstTextRun !== null &&
@@ -445,24 +541,24 @@ export class DocxParser {
           status: "pendiente",
         });
       }
+    }
 
-      if (name === "w:p") {
-        for (const textBox of findElements(child, "w:txbxContent")) {
-          const text = findElements(textBox, "w:t")
-            .map((node) => extractText(node))
-            .join("");
-          if (text) {
-            warnings.push({
-              code: "unclassified-element",
-              message:
-                `El cuadro de texto del párrafo no se convirtió a un bloque del artículo. Texto: ${text}`,
-              blockIndex,
-              status: "pendiente",
-            });
-          }
-        }
+    for (const alternate of collectXmlNodes(body, "mc:AlternateContent")) {
+      const alternateRecord = asXmlRecord(alternate);
+      const choices = alternateRecord?.["mc:Choice"];
+      const fallback = alternateRecord?.["mc:Fallback"];
+      const mainText = this.extractRunText(Array.isArray(choices) ? choices[0] : choices);
+      const fallbackText = this.extractRunText(fallback);
+      if (mainText && mainText === fallbackText) {
+        warnings.push({
+          code: "duplicate-alternate-content-removed",
+          message: `Se descartó la rama alternativa duplicada de mc:AlternateContent: ${mainText}`,
+          status: "pendiente",
+        });
       }
     }
+
+    warnings.push(...this.collectUnknownWordWarnings(body, paragraphs));
 
     for (let index = 1; index < paragraphs.length - 1; index++) {
       const previousLength =
@@ -512,6 +608,69 @@ export class DocxParser {
     return warnings;
   }
 
+  private collectUnknownWordWarnings(
+    body: unknown,
+    paragraphs: RawParagraph[]
+  ): ParseWarning[] {
+    const known = new Set([
+      "w:body", "w:p", "w:r", "w:t", "w:pPr", "w:rPr", "w:pStyle",
+      "w:sz", "w:b", "w:i", "w:vertAlign", "w:tab", "w:br",
+      "w:noBreakHyphen", "w:softHyphen", "w:sym", "w:instrText",
+      "w:fldChar", "w:fldSimple", "w:hyperlink", "w:footnoteReference",
+      "w:endnoteReference", "w:del", "w:delText", "w:ins", "w:sdt",
+      "w:sdtContent", "w:sdtPr", "w:tag", "w:lock", "w:tbl", "w:tblPr",
+      "w:tblCaption", "w:tblGrid", "w:tblW", "w:tblBorders", "w:tr",
+      "w:trPr", "w:tblHeader", "w:tc", "w:tcPr", "w:tcW", "w:gridSpan",
+      "w:sectPr", "w:pgSz", "w:pgMar", "w:bookmarkStart", "w:bookmarkEnd",
+      "w:proofErr", "w:smartTag", "w:customXml", "w:txbxContent",
+      "w:drawing", "w:pict", "w:moveFrom", "w:moveTo", "w:moveFromRangeStart",
+      "w:moveFromRangeEnd", "w:moveToRangeStart", "w:moveToRangeEnd",
+      "w:numPr", "w:numId", "w:ilvl", "w:spacing", "w:ind", "w:jc",
+      "w:keepNext", "w:keepLines", "w:pageBreakBefore", "w:tabs", "w:tab",
+      "w:hyperlink", "w:color", "w:u", "w:strike", "w:caps", "w:smallCaps",
+    ]);
+    const warnings: ParseWarning[] = [];
+    const visited = new Set<unknown>();
+    const paragraphIndexes = new Map(
+      paragraphs.map((paragraph) => [paragraph.xml, paragraph.blockIndex])
+    );
+    const visit = (node: unknown, blockIndex?: number): void => {
+      if (Array.isArray(node)) {
+        node.forEach((child) => visit(child, blockIndex));
+        return;
+      }
+      const record = asXmlRecord(node);
+      if (!record || visited.has(node)) return;
+      visited.add(node);
+      blockIndex = paragraphIndexes.get(node) ?? blockIndex;
+      const name = getXmlName(node);
+      if (name === "mc:Fallback" || name === "w:del") return;
+      if (name === "mc:AlternateContent") {
+        const choice = Array.isArray(record["mc:Choice"])
+          ? record["mc:Choice"][0]
+          : record["mc:Fallback"];
+        if (choice) visit(choice, blockIndex);
+        return;
+      }
+      if (name?.startsWith("w:") && !known.has(name)) {
+        const text = this.extractRunText(node).trim();
+        warnings.push({
+          code: "unknown-ooxml-element",
+          message: `Elemento OOXML no reconocido ${name}${text ? `; texto: ${text}` : ""}.`,
+          ...(blockIndex !== undefined ? { blockIndex } : {}),
+          status: "pendiente",
+        });
+      }
+      for (const [key, value] of Object.entries(record)) {
+        if (key !== ":@" && !key.startsWith("#")) {
+          visit(value, blockIndex);
+        }
+      }
+    };
+    visit(body);
+    return warnings;
+  }
+
   private normalizeBlocks(
     paragraphs: RawParagraph[]
   ): RawParagraph[] {
@@ -529,28 +688,34 @@ export class DocxParser {
     for (let i = 0; i < runs.length; i++) {
       const run = runs[i];
 
-      if (run.type !== "text") {
-        normalized.push(run);
-        continue;
-      }
-
       const previous =
         normalized[normalized.length - 1];
 
-      if (
-        !previous ||
-        previous.type !== "text" ||
-        previous.bold !== run.bold ||
-        previous.italic !== run.italic
-      ) {
+      if (!previous || !this.canMergeRuns(previous, run)) {
         normalized.push({ ...run });
         continue;
       }
 
-      previous.text += run.text;
+      if (previous.type !== "noteRef" && run.type !== "noteRef") {
+        previous.text += run.text;
+      }
     }
 
     return normalized;
+  }
+
+  private canMergeRuns(left: InlineRun, right: InlineRun): boolean {
+    if (left.type !== right.type || left.type === "citation" || left.type === "noteRef") {
+      return false;
+    }
+    if (right.type === "citation" || right.type === "noteRef") return false;
+    return left.bold === right.bold &&
+      left.italic === right.italic &&
+      left.sizeHalfPoints === right.sizeHalfPoints &&
+      (left.type !== "link" || (right.type === "link" && left.href === right.href)) &&
+      (left.type !== "fieldCitation" ||
+        (right.type === "fieldCitation" &&
+          JSON.stringify(left.metadata) === JSON.stringify(right.metadata)));
   }
 
   private buildBodyBlocks(
@@ -588,64 +753,244 @@ export class DocxParser {
 
   private parseRuns(
     paragraph: any,
-    stylesResolver: StylesResolver
+    stylesResolver: StylesResolver,
+    context: ParseContext,
+    blockIndex: number,
+    styleId: string | null
   ): InlineRun[] {
-    const runElements =
-      findElements(paragraph, "w:r");
-
     const result: InlineRun[] = [];
-
-    for (const run of runElements) {
-      const footnoteRef =
-        collectXmlNodes(run, "w:footnoteReference")[0];
-
-      if (footnoteRef) {
-        const id = readWId(footnoteRef);
-
+    const visit = (
+      node: unknown,
+      run: unknown | null = null,
+      hyperlink: string | null = null
+    ): void => {
+      if (Array.isArray(node)) {
+        node.forEach((child) => visit(child, run, hyperlink));
+        return;
+      }
+      if (typeof node === "string" || node === null) return;
+      const record = asXmlRecord(node);
+      if (!record) return;
+      const name = getXmlName(node);
+      if (name === "mc:Fallback" || name === "w:del") return;
+      if (name === "w:txbxContent") return;
+      if (name === "mc:AlternateContent") {
+        const choice = Array.isArray(record["mc:Choice"])
+          ? record["mc:Choice"][0]
+          : record["mc:Fallback"];
+        if (choice) visit(choice, run, hyperlink);
+        return;
+      }
+      if (name === "w:r") {
+        visit(record[name], node, hyperlink);
+        return;
+      }
+      if (name === "w:fldSimple") {
+        context.fields.push({
+          instruction: getXmlAttribute(node, "w:instr") ?? "",
+          separated: true,
+          discarded: false,
+        });
+        visit(record[name], run, hyperlink);
+        context.fields.pop();
+        return;
+      }
+      if (name === "w:fldChar") {
+        const type = getXmlAttribute(node, "w:fldCharType");
+        if (type === "begin") {
+          context.fields.push({
+            instruction: "",
+            separated: false,
+            discarded: false,
+          });
+        } else if (type === "separate") {
+          const field = context.fields[context.fields.length - 1];
+          if (field) {
+            field.separated = true;
+            const command = field.instruction.trim().split(/\s+/)[0]
+              ?.toUpperCase();
+            const isLayoutField = /^(?:TOC|PAGEREF)$/.test(command ?? "") ||
+              (headerRules.layoutFieldStylePatterns.some((pattern) =>
+                pattern.test(styleId ?? "")
+              ) &&
+                /^(?:SEQ|PAGE|NUMPAGES|PAGEREF)$/.test(command ?? ""));
+            field.discarded = isLayoutField;
+            if (isLayoutField) {
+              context.warnings.push({
+                code: "layout-field-discarded",
+                message: `Se descartó el resultado del campo de maquetación ${command}: ${field.instruction.trim()}`,
+                blockIndex,
+                status: "pendiente",
+              });
+            }
+          }
+        } else if (type === "end" && context.fields.length) {
+          context.fields.pop();
+        }
+        return;
+      }
+      if (name === "w:instrText") {
+        const field = context.fields[context.fields.length - 1];
+        if (field) {
+          const value = record[name];
+          const text = typeof value === "string"
+            ? value
+            : Array.isArray(value)
+              ? value.map((part) => {
+                  const textNode = asXmlRecord(part);
+                  return String(textNode?.["#text"] ?? "");
+                }).join("")
+              : "";
+          field.instruction += text;
+        }
+        return;
+      }
+      if (name === "w:t") {
+        const textNode = asXmlRecord(record[name]);
+        const rawText = typeof record[name] === "string"
+          ? record[name] as string
+          : typeof textNode?.["#text"] === "string"
+            ? textNode["#text"] as string
+            : "";
+        const normalized = normalizeVisibleText(rawText);
+        if (normalized.changed) {
+          context.warnings.push({
+            code: "text-normalized",
+            message: `Se normalizaron caracteres no estándar en el texto: ${rawText}`,
+            blockIndex,
+            status: "pendiente",
+          });
+        }
+        appendText(normalized.text, run, hyperlink);
+        return;
+      }
+      if (name === "w:tab") {
+        appendText(" ", run, hyperlink);
+        return;
+      }
+      if (name === "w:br") {
+        appendText("\n", run, hyperlink);
+        return;
+      }
+      if (name === "w:noBreakHyphen") {
+        appendText("-", run, hyperlink);
+        return;
+      }
+      if (name === "w:softHyphen") return;
+      if (name === "w:sym") {
+        const rawChar = getXmlAttribute(node, "w:char");
+        const codePoint = rawChar ? Number.parseInt(rawChar, 16) : Number.NaN;
+        if (Number.isInteger(codePoint) && codePoint > 0 && codePoint <= 0x10ffff) {
+          appendText(String.fromCodePoint(codePoint), run, hyperlink);
+        } else {
+          context.warnings.push({
+            code: "unresolved-symbol",
+            message: `No se pudo resolver el símbolo OOXML ${rawChar ?? "(sin código)"}.`,
+            blockIndex,
+            status: "pendiente",
+          });
+        }
+        return;
+      }
+      if (name === "w:footnoteReference" || name === "w:endnoteReference") {
+        const id = readWId(node);
         if (id !== null) {
           result.push({
             type: "noteRef",
             noteId: id,
-            noteType: "footnote",
+            noteType: name === "w:footnoteReference" ? "footnote" : "endnote",
           });
         }
-
-        continue;
+        return;
       }
-
-      const endnoteRef =
-        collectXmlNodes(run, "w:endnoteReference")[0];
-
-      if (endnoteRef) {
-        const id = readWId(endnoteRef);
-
-        if (id !== null) {
-          result.push({
-            type: "noteRef",
-            noteId: id,
-            noteType: "endnote",
-          });
+      if (name === "w:hyperlink") {
+        const relId = getXmlAttribute(node, "r:id");
+        const anchor = getXmlAttribute(node, "w:anchor");
+        visit(
+          record[name],
+          run,
+          relId ? context.hyperlinkTargets.get(relId) ?? null
+            : anchor ? `#${anchor}` : hyperlink
+        );
+        return;
+      }
+      if (name === "w:delText") return;
+      if (name === "w:ins") {
+        visit(record[name], run, hyperlink);
+        return;
+      }
+      for (const [key, value] of Object.entries(record)) {
+        if (key !== ":@" && !key.startsWith("#")) {
+          visit(value, run, hyperlink);
         }
-
-        continue;
       }
+    };
 
-      const text = this.extractRunText(run);
+    const appendText = (
+      text: string,
+      run: unknown | null,
+      explicitHyperlink: string | null
+    ): void => {
+      if (!text) return;
+      if (
+        context.fields.some((field) => !field.separated || field.discarded)
+      ) {
+        return;
+      }
+      const fieldInstruction = context.fields
+        .map((field) => field.instruction)
+        .join(" ");
+      const hyperlinkField = fieldInstruction.match(
+        /\bHYPERLINK\s+(?:"([^"]+)"|'([^']+)'|(\S+))/i
+      );
+      const anchorField = fieldInstruction.match(/\\l\s+"([^"]+)"/i);
+      const href = explicitHyperlink ??
+        hyperlinkField?.[1] ??
+        hyperlinkField?.[2] ??
+        hyperlinkField?.[3] ??
+        (anchorField ? `#${anchorField[1]}` : null);
+      const citationField = context.fields.some((field) =>
+        /\b(?:ZOTERO_ITEM|MENDELEY)\b/i.test(field.instruction)
+      );
+      const metadata = citationField
+        ? context.fields.map((field) => citationMetadata(field.instruction))
+          .find((item) => item !== undefined)
+        : undefined;
+      const props = run
+        ? stylesResolver.resolveRunProps(paragraph, run)
+        : { bold: false, italic: false, sizeHalfPoints: null };
+      const formatting = {
+        ...(props.bold ? { bold: true } : {}),
+        ...(props.italic ? { italic: true } : {}),
+        ...(props.sizeHalfPoints
+          ? { sizeHalfPoints: props.sizeHalfPoints }
+          : {}),
+      };
+      if (citationField) {
+        result.push({ type: "fieldCitation", text, metadata, ...formatting });
+      } else if (href) {
+        result.push({ type: "link", text, href, ...formatting });
+      } else {
+        result.push({ type: "text", text, ...formatting });
+      }
+    };
 
-      if (!text) continue;
-
-      const { bold, italic } =
-        stylesResolver.resolveRunProps(paragraph, run);
-
-      result.push({
-        type: "text",
-        text,
-        ...(bold ? { bold } : {}),
-        ...(italic ? { italic } : {}),
-      });
-    }
-
+    visit(paragraph);
     return result;
+  }
+
+  private readHyperlinkTargets(
+    relationshipsXml: string | null
+  ): Map<string, string> {
+    if (!relationshipsXml) return new Map();
+    const relationships = this.xmlParser.parse(relationshipsXml);
+    const targets = new Map<string, string>();
+    for (const relationship of collectXmlNodes(relationships, "Relationship")) {
+      const id = getXmlAttribute(relationship, "Id");
+      const target = getXmlAttribute(relationship, "Target");
+      if (id && target) targets.set(id, target);
+    }
+    return targets;
   }
 
   private extractRunText(run: any): string {
@@ -660,10 +1005,27 @@ export class DocxParser {
       if (!record) return "";
 
       const name = getXmlName(node);
+      if (name === "mc:Fallback" || name === "w:del" || name === "w:instrText" || name === "w:delText") {
+        return "";
+      }
+      if (name === "w:txbxContent") return "";
+      if (name === "mc:AlternateContent") {
+        const choice = Array.isArray(record["mc:Choice"])
+          ? record["mc:Choice"][0]
+          : record["mc:Fallback"];
+        return choice ? visit(choice) : "";
+      }
       if (name === "w:tab") return " ";
       if (name === "w:br") return "\n";
       if (name === "w:noBreakHyphen") return "-";
       if (name === "w:softHyphen") return "";
+      if (name === "w:sym") {
+        const rawChar = getXmlAttribute(node, "w:char");
+        const codePoint = rawChar ? Number.parseInt(rawChar, 16) : Number.NaN;
+        return Number.isInteger(codePoint) && codePoint > 0 && codePoint <= 0x10ffff
+          ? String.fromCodePoint(codePoint)
+          : "";
+      }
       if (name === "w:t") return visit(record[name]);
 
       return Object.entries(record)
@@ -678,11 +1040,7 @@ export class DocxParser {
   private extractParagraphText(
     paragraph: any
   ): string {
-    const runNodes = findElements(paragraph, "w:r");
-
-    return runNodes
-      .map((node) => this.extractRunText(node))
-      .join("");
+    return this.extractRunText(paragraph);
   }
 
   private getHeadingLevel(
@@ -730,9 +1088,22 @@ export class DocxParser {
       if (!Array.isArray(children)) return;
       for (const child of children) {
         const name = getXmlName(child);
+        const record = asXmlRecord(child);
+        if (name === "w:del" || name === "mc:Fallback") continue;
         if (name === "w:sdt") {
           const content = findElement(child, "w:sdtContent");
           if (content) visit(content);
+          continue;
+        }
+        if (name === "w:ins") {
+          visit(record?.[name]);
+          continue;
+        }
+        if (name === "mc:AlternateContent") {
+          const choice = Array.isArray(record?.["mc:Choice"])
+            ? record["mc:Choice"][0]
+            : record?.["mc:Fallback"];
+          if (choice) visit(choice);
           continue;
         }
         if (name) {
@@ -830,7 +1201,8 @@ export class DocxParser {
     consumedBlockIndexes: Set<number>,
     consumedNoteBlockIndexes: Set<number>,
     referenceHeadingBlockIndex: number | null,
-    extractedBlocks: Map<number, BodyBlock[]>
+    extractedBlocks: Map<number, BodyBlock[]>,
+    parseContext: ParseContext
   ): ExtractedMainBody {
     const texts = paragraphs.map(
       (paragraph) => paragraph.text.trim()
@@ -914,7 +1286,100 @@ export class DocxParser {
       sourceBlockIndexes.push(...blocks.map(() => blockIndex));
     }
 
-    return { blocks: bodyBlocks, sourceBlockIndexes };
+    const paragraphByIndex = new Map(
+      paragraphs.map((paragraph) => [paragraph.blockIndex, paragraph])
+    );
+    const joinedBlocks: BodyBlock[] = [];
+    const joinedSourceIndexes: number[] = [];
+    for (let index = 0; index < bodyBlocks.length; index++) {
+      const current = bodyBlocks[index];
+      const currentSourceIndex = sourceBlockIndexes[index];
+      const previous = joinedBlocks[joinedBlocks.length - 1];
+      const previousSourceIndex =
+        joinedSourceIndexes[joinedSourceIndexes.length - 1];
+      const previousParagraph = paragraphByIndex.get(previousSourceIndex);
+      const currentParagraph = paragraphByIndex.get(currentSourceIndex);
+      if (
+        headerRules.paragraphJoining.enabled &&
+        previous?.type === "paragraph" &&
+        current.type === "paragraph" &&
+        previousParagraph &&
+        currentParagraph &&
+        previousParagraph.styleId === currentParagraph.styleId &&
+        previousParagraph.sizeHalfPoints === currentParagraph.sizeHalfPoints
+      ) {
+        const previousText = previous.runs
+          .filter((run) => run.type !== "noteRef")
+          .map((run) => run.text)
+          .join("")
+          .trimEnd();
+        const currentText = current.runs
+          .filter((run) => run.type !== "noteRef")
+          .map((run) => run.text)
+          .join("")
+          .trimStart();
+        const startsLowercase =
+          headerRules.paragraphJoining.startsLowercase.test(currentText);
+        if (
+          previousText &&
+          currentText &&
+          !headerRules.paragraphJoining.terminalPunctuation.test(previousText) &&
+          startsLowercase
+        ) {
+          previous.runs.push({ type: "text", text: " " });
+          previous.runs.push(...current.runs);
+          parseContext.warnings.push({
+            code: "paragraphs-joined",
+            message: `Se unieron estos fragmentos de párrafo: "${previousText}" + "${currentText}"`,
+            blockIndex: previousSourceIndex,
+            status: "pendiente",
+          });
+          continue;
+        }
+      }
+      joinedBlocks.push(current);
+      joinedSourceIndexes.push(currentSourceIndex);
+    }
+
+    const deduplicatedBlocks: BodyBlock[] = [];
+    const deduplicatedSourceIndexes: number[] = [];
+    for (let index = 0; index < joinedBlocks.length; index++) {
+      const block = joinedBlocks[index];
+      const previous = deduplicatedBlocks[deduplicatedBlocks.length - 1];
+      if (
+        previous &&
+        JSON.stringify(previous) === JSON.stringify(block)
+      ) {
+        parseContext.warnings.push({
+          code: "duplicate-block-removed",
+          message: `Se eliminó un bloque consecutivo idéntico duplicado: ${this.bodyBlockText(block)}`,
+          blockIndex: joinedSourceIndexes[index],
+          status: "pendiente",
+        });
+        continue;
+      }
+      deduplicatedBlocks.push(block);
+      deduplicatedSourceIndexes.push(joinedSourceIndexes[index]);
+    }
+
+    return {
+      blocks: deduplicatedBlocks,
+      sourceBlockIndexes: deduplicatedSourceIndexes,
+    };
+  }
+
+  private bodyBlockText(block: BodyBlock): string {
+    if ("runs" in block) {
+      return block.runs
+        .filter((run) => run.type !== "noteRef")
+        .map((run) => run.text)
+        .join("");
+    }
+    if (block.type === "table") {
+      return [...block.headers, ...block.rows.flat()].join(" ");
+    }
+    if (block.type === "image") return block.caption ?? block.alt ?? block.fileName;
+    return "";
   }
 
   private findMainBodyStart(

@@ -24,6 +24,11 @@ function escapeHtml(value: string): string {
     .replace(/'/g, "&#39;");
 }
 
+function safeHref(value: string): boolean {
+  const protocol = value.match(/^([a-z][a-z\d+.-]*):/i)?.[1]?.toLowerCase();
+  return !protocol || ["http", "https", "mailto", "tel"].includes(protocol);
+}
+
 function noteKey(type: Note["type"], id: number): string {
   return `${type}-${id}`;
 }
@@ -77,6 +82,15 @@ function renderRuns(
         } ${run.noteId}" role="doc-noteref">${run.noteId}</a></sup>`;
       }
 
+      if (run.type === "link") {
+        let content = escapeHtml(run.text);
+        if (run.italic) content = `<em>${content}</em>`;
+        if (run.bold) content = `<strong>${content}</strong>`;
+        return safeHref(run.href)
+          ? `<a href="${escapeHtml(run.href)}">${content}</a>`
+          : content;
+      }
+
       let content = escapeHtml(run.text);
       if (run.italic) content = `<em>${content}</em>`;
       if (run.bold) content = `<strong>${content}</strong>`;
@@ -127,7 +141,13 @@ function renderTable(
         .join("")}</tr></thead>`
     : "";
 
-  return `<div class="article-table-wrap" data-bloque-id="${blockId}"><table class="article-table">${header}<tbody>${tableRows}</tbody></table></div>`;
+  const caption = block.caption
+    ? `<caption>${escapeHtml(block.caption)}</caption>`
+    : "";
+  const label = block.caption || "Tabla del artículo";
+  return `<div class="article-table-wrap" data-bloque-id="${blockId}" role="region" aria-label="${escapeHtml(
+    label
+  )}" tabindex="0"><table class="article-table">${caption}${header}<tbody>${tableRows}</tbody></table></div>`;
 }
 
 function renderBody(
@@ -168,7 +188,9 @@ function renderBody(
 
       return `<figure class="article-figure" data-bloque-id="${blockId}"><img src="${escapeHtml(
         `${article.document.source.replace(/\.[^.]+$/, "")}_assets/${block.fileName}`
-      )}" alt="${escapeHtml(block.alt ?? "")}" /></figure>`;
+      )}" alt="${escapeHtml(block.alt ?? "")}" />${
+        block.caption ? `<figcaption>${escapeHtml(block.caption)}</figcaption>` : ""
+      }</figure>`;
     })
     .join("\n");
 }
@@ -246,27 +268,6 @@ function renderAuthors(article: Article): string {
     .join("; ");
 
   return `<p class="article-byline">${authors}</p>`;
-}
-
-function renderSourceParagraphs(article: Article): string {
-  const paragraphs = article.header.sourceParagraphs;
-  if (!paragraphs?.length) return "";
-
-  const title = article.header.title?.trim();
-  let titleRendered = false;
-  return paragraphs
-    .map((paragraph) => {
-      if (!titleRendered && title && paragraph.trim() === title) {
-        titleRendered = true;
-        return `<h2 class="article-heading" id="article-title">${escapeHtml(
-          paragraph
-        )}</h2>`;
-      }
-      return `<p class="article-header-source">${escapeHtml(
-        paragraph
-      )}</p>`;
-    })
-    .join("\n");
 }
 
 function renderAffiliations(article: Article): string {
@@ -391,7 +392,7 @@ export function renderArticle(
   article: Article,
   magazine?: MagazineConfig
 ): string {
-  const title = article.header.title?.trim() || "Artículo sin título";
+  const title = article.header.title?.trim() ?? "";
   const magazineColor = magazine?.color ?? "#245B4B";
   if (!/^#[0-9a-f]{6}$/i.test(magazineColor)) {
     throw new Error("El color debe ser hexadecimal válido en formato #RRGGBB.");
@@ -430,9 +431,9 @@ export function renderArticle(
     <article class="article-content" aria-labelledby="article-title">
       <header class="article-header">
         <section class="article-data" aria-label="Datos del artículo">
-          ${renderSourceParagraphs(article) || [
+          ${[
             `<h2 class="article-heading" id="article-title">${escapeHtml(
-              title
+              article.header.title?.trim() ?? ""
             )}</h2>`,
             titleTranslation,
             renderAuthors(article),
