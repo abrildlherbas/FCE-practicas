@@ -73,6 +73,17 @@ describe("flujo de revisión de la aplicación", () => {
     expect(byId(document, "appMessage").getAttribute("aria-live")).toBe(
       "polite"
     );
+    const closeEditButton = byId(document, "closeHtmlEditButton");
+    expect(closeEditButton.textContent?.trim()).toBe("×");
+    expect(closeEditButton.getAttribute("aria-label")).toBe(
+      "Volver a la vista previa"
+    );
+    expect(byId(document, "regenerationDialog").getAttribute("role")).toBe(
+      "dialog"
+    );
+    expect(byId(document, "closeEditDialog").getAttribute("aria-modal")).toBe(
+      "true"
+    );
   });
 
   it("usa textos sencillos para revisar, aprobar y guardar", async () => {
@@ -89,6 +100,11 @@ describe("flujo de revisión de la aplicación", () => {
     expect(visibleText).toContain("Aprobar artículo");
     expect(visibleText).toContain("Guardar artículo");
     expect(visibleText).toContain("Lo encontrarás en esta ubicación:");
+    expect(visibleText).toContain("Guardar y cerrar");
+    expect(visibleText).toContain("Descartar cambios");
+    expect(visibleText).toContain("Seguir editando");
+    expect(visibleText).toContain("Regenerar y conservar mis ediciones");
+    expect(visibleText).toContain("Regenerar y descartarlas");
     expect(visibleText).not.toMatch(
       /\b(parser|renderer|JSON|HTML|metadatos|relación OOXML)\b/i
     );

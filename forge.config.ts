@@ -1,4 +1,4 @@
-import type { ForgeConfig } from "@electron-forge/shared-types";
+﻿import type { ForgeConfig } from "@electron-forge/shared-types";
 import { VitePlugin } from "@electron-forge/plugin-vite";
 
 const config: ForgeConfig = {
@@ -11,16 +11,20 @@ const config: ForgeConfig = {
   makers: [
     {
       name: "@electron-forge/maker-squirrel",
+      config: {},
     },
     {
       name: "@electron-forge/maker-zip",
       platforms: ["win32"],
+      config: {},
     },
     {
       name: "@electron-forge/maker-deb",
+      config: {},
     },
     {
       name: "@electron-forge/maker-rpm",
+      config: {},
     },
   ],
 

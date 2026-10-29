@@ -396,6 +396,85 @@ iframe:focus-visible {
   font-weight: 600;
 }
 
+.button-close-edit {
+  display: grid;
+  width: 2.5rem;
+  min-height: 2.5rem;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 1.6rem;
+  line-height: 1;
+}
+
+.decision-dialog {
+  position: fixed;
+  z-index: 20;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgb(20 30 24 / 48%);
+}
+
+.decision-dialog[hidden] {
+  display: none;
+}
+
+.decision-dialog-panel {
+  width: min(100%, 34rem);
+  padding: clamp(1.25rem, 4vw, 2rem);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.decision-dialog-panel h2 {
+  margin-top: 0;
+}
+
+.decision-dialog-panel p {
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.decision-dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  margin-top: 1.25rem;
+}
+
+.edit-conflicts {
+  margin-top: 1.25rem;
+  padding: 1rem;
+  border: 1px solid var(--warning-border);
+  border-radius: 8px;
+  background: var(--warning-bg);
+}
+
+.edit-conflicts h3,
+.edit-conflicts p {
+  margin-top: 0;
+}
+
+.edit-conflicts li {
+  margin-block: 0.75rem;
+}
+
+.edit-conflicts pre {
+  max-height: 12rem;
+  overflow: auto;
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .article-preview.is-expanded {
   position: fixed;
   z-index: 10;

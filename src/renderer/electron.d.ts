@@ -1,6 +1,7 @@
 export {};
 
 import type { Article, ParseWarning } from "../converter/models/Article";
+import type { ArticleEditState } from "../main/article-storage";
 
 declare global {
   interface Window {
@@ -14,7 +15,18 @@ declare global {
         warnings: ParseWarning[]
       ): Promise<void>;
 
-      preparePreview(html: string): Promise<string>;
+      preparePreview(html: string, filePath?: string): Promise<string>;
+
+      activateDocument(filePath: string): Promise<void>;
+
+      loadArticleEditState(filePath: string): Promise<ArticleEditState>;
+
+      saveArticleEditState(
+        filePath: string,
+        state: ArticleEditState
+      ): Promise<void>;
+
+      setEditorDraftStatus(dirty: boolean): void;
 
       exportArticle(html: string): Promise<string | null>;
 

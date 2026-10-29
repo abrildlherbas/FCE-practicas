@@ -1,5 +1,16 @@
-import type { Article } from "../converter/models/Article";
+﻿import type { Article } from "../converter/models/Article";
+import {
+  captureManualBlockEdits,
+  prepareRegeneration,
+  type ManualBlockEdit,
+  type RegenerationChoice,
+} from "../renderer-html/block-edits";
+import {
+  attachEditorCloseFlow,
+  showDecisionDialog,
+} from "./decision-dialog";
 import { renderArticle } from "../renderer-html/renderArticle";
+import type { ArticleEditState } from "../main/article-storage";
 import {
   annotateWarningFragments,
   clearWarningAnnotations,
@@ -61,7 +72,26 @@ const saveHtmlEditButton =
   getElement<HTMLButtonElement>("#saveHtmlEditButton");
 const cancelHtmlEditButton =
   getElement<HTMLButtonElement>("#cancelHtmlEditButton");
+const closeHtmlEditButton =
+  getElement<HTMLButtonElement>("#closeHtmlEditButton");
 const editWarning = getElement<HTMLParagraphElement>("#editWarning");
+const regenerationDialog = getElement<HTMLElement>("#regenerationDialog");
+const manualEditCount = getElement<HTMLSpanElement>("#manualEditCount");
+const regenerateKeepButton =
+  getElement<HTMLButtonElement>("#regenerateKeepButton");
+const regenerateDiscardButton =
+  getElement<HTMLButtonElement>("#regenerateDiscardButton");
+const regenerateCancelButton =
+  getElement<HTMLButtonElement>("#regenerateCancelButton");
+const closeEditDialog = getElement<HTMLElement>("#closeEditDialog");
+const saveAndCloseEditButton =
+  getElement<HTMLButtonElement>("#saveAndCloseEditButton");
+const discardAndCloseEditButton =
+  getElement<HTMLButtonElement>("#discardAndCloseEditButton");
+const continueEditingButton =
+  getElement<HTMLButtonElement>("#continueEditingButton");
+const editConflicts = getElement<HTMLElement>("#editConflicts");
+const editConflictList = getElement<HTMLUListElement>("#editConflictList");
 const panels = [
   getElement<HTMLElement>("#stepChoose"),
   getElement<HTMLElement>("#stepReview"),
@@ -85,6 +115,9 @@ let isBusy = false;
 let hasManualEdits = false;
 let isPreviewEditing = false;
 let warningFilter: WarningFilter = "pendientes";
+let isPreviewDirty = false;
+let currentManualEdits: ManualBlockEdit[] = [];
+let draftSaveTimer: number | null = null;
 let selectedBrandColor: string | null = null;
 
 const HEX_COLOR_PATTERN = /^#[0-9a-f]{6}$/i;
@@ -117,6 +150,34 @@ function showStep(step: number): void {
       indicator.removeAttribute("aria-current");
     }
   });
+}
+
+function serializeDocument(document: Document): string {
+  const doctype = document.doctype ? "<!doctype html>\n" : "";
+  return `${doctype}${document.documentElement.outerHTML}`;
+}
+
+function showEditConflicts(conflicts: ManualBlockEdit[]): void {
+  editConflictList.replaceChildren();
+  for (const conflict of conflicts) {
+    const item = document.createElement("li");
+    const details = document.createElement("details");
+    const summary = document.createElement("summary");
+    summary.textContent = `El bloque ${conflict.blockId} cambió`;
+    const content = document.createElement("pre");
+    content.textContent = conflict.html || "(La edición eliminó este bloque.)";
+    details.append(summary, content);
+    item.append(details);
+    editConflictList.append(item);
+  }
+  editConflicts.hidden = conflicts.length === 0;
+}
+
+async function saveArticleState(
+  filePath: string,
+  state: ArticleEditState
+): Promise<void> {
+  await window.electronAPI.saveArticleEditState(filePath, state);
 }
 
 function setStatus(status: "pendiente" | "con-advertencias" | "aprobado"): void {
@@ -315,16 +376,26 @@ function setBusy(busy: boolean): void {
   editHtmlButton.disabled = busy;
   saveHtmlEditButton.disabled = busy;
   cancelHtmlEditButton.disabled = busy;
+  closeHtmlEditButton.disabled = busy;
 }
 
 function resetToStart(): void {
+  if (draftSaveTimer !== null) {
+    window.clearTimeout(draftSaveTimer);
+    draftSaveTimer = null;
+  }
   currentArticle = null;
   currentHtml = "";
   currentExportHtml = "";
   currentFilePath = "";
   hasManualEdits = false;
+  currentManualEdits = [];
   isPreviewEditing = false;
+  isPreviewDirty = false;
+  window.electronAPI.setEditorDraftStatus(false);
   editWarning.hidden = true;
+  closeHtmlEditButton.hidden = true;
+  editConflicts.hidden = true;
   preview.classList.remove("is-expanded", "is-editing");
   isApproved = false;
   preview.removeAttribute("srcdoc");
@@ -346,16 +417,38 @@ function resetToStart(): void {
   selectButton.focus();
 }
 
+async function askRegenerationChoice(
+  count: number
+): Promise<RegenerationChoice> {
+  manualEditCount.textContent = String(count);
+  return showDecisionDialog(
+    regenerationDialog,
+    [
+      { button: regenerateKeepButton, value: "keep" },
+      { button: regenerateDiscardButton, value: "discard" },
+      { button: regenerateCancelButton, value: "cancel" },
+    ],
+    "cancel"
+  );
+}
+
 async function chooseAndPrepareDocument(): Promise<void> {
   if (isBusy) return;
-  if (
-    hasManualEdits &&
-    !window.confirm(
-      "Si vuelves a generar el artículo, podrías perder la edición manual. ¿Quieres continuar?"
-    )
-  ) {
+  if (isPreviewEditing) {
+    showMessage("Cierra la edición antes de regenerar el artículo.");
     return;
   }
+
+  let choice: RegenerationChoice = "keep";
+  let alreadyAsked = false;
+  if (currentManualEdits.length > 0) {
+    const previousFocus = document.activeElement as HTMLElement | null;
+    choice = await askRegenerationChoice(currentManualEdits.length);
+    alreadyAsked = true;
+    previousFocus?.focus();
+    if (choice === "cancel") return;
+  }
+
   clearMessage();
   if (!selectedBrandColor) {
     showMessage("Elegí un color hexadecimal válido en formato #RRGGBB.");
@@ -373,45 +466,119 @@ async function chooseAndPrepareDocument(): Promise<void> {
   }
   if (!filePath) return;
 
+  const previousFilePath = currentFilePath;
+  if (filePath !== previousFilePath) {
+    choice = "keep";
+    alreadyAsked = false;
+  }
   setBusy(true);
   showMessage("Estamos preparando el artículo. Esto puede tardar un momento.");
-  currentFilePath = filePath;
-  hasManualEdits = false;
-  editWarning.hidden = true;
-  isApproved = false;
-  savedFilePath.textContent = "";
-  savedLocation.hidden = true;
-  openFolderButton.hidden = true;
-  downloadArticleLink.hidden = true;
-  downloadArticleLink.removeAttribute("href");
-  downloadArticleLink.removeAttribute("download");
-  if (downloadedHtmlUrl) {
-    URL.revokeObjectURL(downloadedHtmlUrl);
-    downloadedHtmlUrl = null;
-  }
-
   try {
+    const storedState = await window.electronAPI.loadArticleEditState(filePath);
+    if (storedState.edits.length > 0 && !alreadyAsked) {
+      const previousFocus = document.activeElement as HTMLElement | null;
+      choice = await askRegenerationChoice(storedState.edits.length);
+      previousFocus?.focus();
+      if (choice === "cancel") {
+        clearMessage();
+        return;
+      }
+    }
+
     const article = await window.electronAPI.convertDocument(filePath);
     const html = renderArticle(article, {
       color: selectedBrandColor,
     });
-    const previewHtml = await window.electronAPI.preparePreview(html);
+    const basePreviewHtml = await window.electronAPI.preparePreview(html, filePath);
+    const baseDocument = new DOMParser().parseFromString(
+      basePreviewHtml,
+      "text/html"
+    );
+    const regeneration = prepareRegeneration(
+      baseDocument,
+      storedState.edits,
+      choice
+    );
+    if (!regeneration) return;
+    const previewHtml = await window.electronAPI.preparePreview(
+      regeneration.html,
+      filePath
+    );
+    const discardDraft = choice === "discard";
+    const restoreDraft =
+      !discardDraft &&
+      storedState.draftHtml &&
+      storedState.draftBaseHtml === previewHtml
+        ? storedState.draftHtml
+        : null;
+    const nextState: ArticleEditState = {
+      edits: regeneration.edits,
+      draftHtml: discardDraft ? null : storedState.draftHtml,
+      draftBaseHtml: discardDraft ? null : storedState.draftBaseHtml,
+    };
+    await saveArticleState(filePath, nextState);
+    await window.electronAPI.activateDocument(filePath);
 
     currentArticle = article;
     warningFilter = "pendientes";
     currentHtml = html;
+    currentFilePath = filePath;
+    currentManualEdits = regeneration.edits;
+    hasManualEdits = currentManualEdits.length > 0;
+    currentHtml = previewHtml;
     currentExportHtml = previewHtml;
+    isPreviewDirty = false;
+    isApproved = false;
+    editWarning.hidden = !hasManualEdits;
+    savedFilePath.textContent = "";
+    savedLocation.hidden = true;
+    openFolderButton.hidden = true;
+    downloadArticleLink.hidden = true;
+    downloadArticleLink.removeAttribute("href");
+    downloadArticleLink.removeAttribute("download");
+    if (downloadedHtmlUrl) {
+      URL.revokeObjectURL(downloadedHtmlUrl);
+      downloadedHtmlUrl = null;
+    }
     fileName.textContent = filePath.split(/[\\/]/).pop() ?? "Documento Word";
     approvedFileName.textContent = fileName.textContent;
-    preview.srcdoc = previewHtml;
+    showEditConflicts(regeneration.conflicts);
+    if (
+      !discardDraft &&
+      storedState.draftHtml &&
+      storedState.draftBaseHtml !== previewHtml
+    ) {
+      const draftItem = document.createElement("li");
+      const details = document.createElement("details");
+      const summary = document.createElement("summary");
+      summary.textContent = "Hay un borrador de otra versión para revisar";
+      const content = document.createElement("pre");
+      content.textContent = storedState.draftHtml;
+      details.append(summary, content);
+      draftItem.append(details);
+      editConflictList.append(draftItem);
+      editConflicts.hidden = false;
+    }
+    if (restoreDraft) {
+      preview.addEventListener(
+        "load",
+        () => {
+          beginPreviewEditing();
+          isPreviewDirty = true;
+          window.electronAPI.setEditorDraftStatus(true);
+          showMessage("Se recuperó el borrador guardado automáticamente.");
+        },
+        { once: true }
+      );
+    }
+    preview.srcdoc = restoreDraft ?? previewHtml;
     preview.setAttribute("sandbox", "allow-same-origin");
     renderWarnings(article);
-    clearMessage();
+    if (!restoreDraft) clearMessage();
     showStep(2);
     document.querySelector<HTMLButtonElement>("#review-title")?.focus();
   } catch (error) {
     console.error(error);
-    resetToStart();
     showMessage(
       "No pudimos preparar este documento. Comprueba que sea un archivo Word válido e inténtalo de nuevo."
     );
@@ -446,7 +613,18 @@ expandPreviewButton.addEventListener("click", () => {
     : "Ampliar vista";
 });
 
-editHtmlButton.addEventListener("click", () => {
+let editorInputHandler: (() => void) | null = null;
+let draftSavePromise: Promise<void> = Promise.resolve();
+let discardPreviewOnExit = false;
+
+function removeWarningHighlights(previewDocument: Document): void {
+  previewDocument
+    .querySelectorAll(".warning-highlight")
+    .forEach((element) => element.classList.remove("warning-highlight"));
+  previewDocument.getElementById("warning-highlight-style")?.remove();
+}
+
+function beginPreviewEditing(): void {
   const previewDocument = preview.contentDocument;
   if (!previewDocument) {
     showMessage("No pudimos abrir la vista previa para editarla.");
@@ -469,58 +647,184 @@ editHtmlButton.addEventListener("click", () => {
   expandPreviewButton.hidden = true;
   saveHtmlEditButton.hidden = false;
   cancelHtmlEditButton.hidden = false;
+  closeHtmlEditButton.hidden = false;
   editWarning.hidden = false;
+  editorInputHandler = () => scheduleDraftAutosave();
+  previewDocument.addEventListener("input", editorInputHandler);
+  window.electronAPI.setEditorDraftStatus(isPreviewDirty);
   showMessage(
     "Puedes editar el artículo directamente en la vista ampliada. Los estilos se mantienen."
   );
-});
+}
 
-saveHtmlEditButton.addEventListener("click", async () => {
+function scheduleDraftAutosave(): void {
+  isPreviewDirty = true;
+  window.electronAPI.setEditorDraftStatus(true);
+  if (draftSaveTimer !== null) window.clearTimeout(draftSaveTimer);
+  draftSaveTimer = window.setTimeout(() => {
+    draftSaveTimer = null;
+    const previewDocument = preview.contentDocument;
+    if (!previewDocument || !currentFilePath) return;
+    removeWarningHighlights(previewDocument);
+    clearWarningAnnotations(previewDocument);
+    const state: ArticleEditState = {
+      edits: currentManualEdits,
+      draftHtml: serializeDocument(previewDocument),
+      draftBaseHtml: currentExportHtml,
+    };
+    draftSavePromise = draftSavePromise
+      .catch(() => undefined)
+      .then(() => saveArticleState(currentFilePath, state));
+    void draftSavePromise.catch((error: unknown) => {
+      console.error(error);
+      showMessage("No pudimos guardar el borrador automáticamente.");
+    });
+  }, 450);
+}
+
+async function commitPreviewEdit(): Promise<boolean> {
   const previewDocument = preview.contentDocument;
-  if (!previewDocument) {
+  if (!previewDocument || !currentFilePath) {
     showMessage("No pudimos guardar la edición del artículo.");
-    return;
+    return false;
   }
-  previewDocument.designMode = "off";
+  if (draftSaveTimer !== null) {
+    window.clearTimeout(draftSaveTimer);
+    draftSaveTimer = null;
+  }
+  await draftSavePromise.catch(() => undefined);
+  removeWarningHighlights(previewDocument);
   clearWarningAnnotations(previewDocument);
-  const doctype = previewDocument.doctype ? "<!doctype html>\n" : "";
-  currentHtml = `${doctype}${previewDocument.documentElement.outerHTML}`;
-  currentExportHtml = currentHtml;
+  const originalDocument = new DOMParser().parseFromString(
+    currentExportHtml,
+    "text/html"
+  );
+  const edits = captureManualBlockEdits(
+    originalDocument,
+    previewDocument,
+    currentManualEdits
+  );
+  const editedHtml = serializeDocument(previewDocument);
+  let preparedHtml: string;
   try {
-    currentExportHtml = await window.electronAPI.preparePreview(currentHtml);
-    preview.srcdoc = currentExportHtml;
+    preparedHtml = await window.electronAPI.preparePreview(
+      editedHtml,
+      currentFilePath
+    );
+    await saveArticleState(currentFilePath, {
+      edits,
+      draftHtml: null,
+      draftBaseHtml: null,
+    });
   } catch (error) {
     console.error(error);
-    showMessage("No pudimos actualizar la vista con la edición guardada.");
-    return;
+    previewDocument.designMode = "on";
+    showMessage("No pudimos guardar la edición. Tus cambios siguen en pantalla.");
+    return false;
   }
+  currentHtml = editedHtml;
+  currentExportHtml = preparedHtml;
+  currentManualEdits = edits;
+  hasManualEdits = edits.length > 0;
+  isPreviewDirty = false;
+  window.electronAPI.setEditorDraftStatus(false);
+  return true;
+}
+
+function leavePreviewEditing(): void {
+  const previewDocument = preview.contentDocument;
+  if (previewDocument) {
+    previewDocument.designMode = "off";
+    if (editorInputHandler) {
+      previewDocument.removeEventListener("input", editorInputHandler);
+    }
+  }
+  editorInputHandler = null;
   isPreviewEditing = false;
-  hasManualEdits = true;
   isApproved = false;
   preview.classList.remove("is-editing", "is-expanded");
   editHtmlButton.hidden = false;
   expandPreviewButton.hidden = false;
   saveHtmlEditButton.hidden = true;
   cancelHtmlEditButton.hidden = true;
+  closeHtmlEditButton.hidden = true;
+  editWarning.hidden = !hasManualEdits;
+  if (discardPreviewOnExit) {
+    preview.srcdoc = currentExportHtml;
+    discardPreviewOnExit = false;
+  }
   setStatus(
     currentArticle && pendingWarnings(currentArticle.warnings).length
       ? "con-advertencias"
       : "pendiente"
   );
-  showMessage("La edición quedó guardada y se usará al exportar el artículo.");
+}
+
+async function discardPreviewEdit(): Promise<boolean> {
+  if (!currentFilePath) return false;
+  if (draftSaveTimer !== null) {
+    window.clearTimeout(draftSaveTimer);
+    draftSaveTimer = null;
+  }
+  try {
+    await draftSavePromise.catch(() => undefined);
+    await saveArticleState(currentFilePath, {
+      edits: currentManualEdits,
+      draftHtml: null,
+      draftBaseHtml: null,
+    });
+    isPreviewDirty = false;
+    window.electronAPI.setEditorDraftStatus(false);
+    discardPreviewOnExit = true;
+    return true;
+  } catch (error) {
+    console.error(error);
+    showMessage("No pudimos descartar el borrador. Tus cambios siguen en pantalla.");
+    return false;
+  }
+}
+
+editHtmlButton.addEventListener("click", beginPreviewEditing);
+let editorExitMessage = "";
+attachEditorCloseFlow({
+  document,
+  closeButton: closeHtmlEditButton,
+  preview,
+  dialog: closeEditDialog,
+  saveButton: saveAndCloseEditButton,
+  discardButton: discardAndCloseEditButton,
+  continueButton: continueEditingButton,
+  returnFocus: editHtmlButton,
+  isEditing: () => isPreviewEditing,
+  hasUnsavedChanges: () => isPreviewDirty,
+  saveChanges: async () => {
+    const saved = await commitPreviewEdit();
+    if (saved) editorExitMessage = "La edición quedó guardada.";
+    return saved;
+  },
+  discardChanges: async () => {
+    const discarded = await discardPreviewEdit();
+    if (discarded) editorExitMessage = "Los cambios sin guardar se descartaron.";
+    return discarded;
+  },
+  closeEditor: () => {
+    leavePreviewEditing();
+    if (editorExitMessage) showMessage(editorExitMessage);
+    else clearMessage();
+    editorExitMessage = "";
+  },
+});
+
+saveHtmlEditButton.addEventListener("click", async () => {
+  if (await commitPreviewEdit()) {
+    leavePreviewEditing();
+    editHtmlButton.focus();
+    showMessage("La edición quedó guardada y se usará al exportar el artículo.");
+  }
 });
 
 cancelHtmlEditButton.addEventListener("click", () => {
-  if (!isPreviewEditing) return;
-  preview.srcdoc = currentExportHtml;
-  isPreviewEditing = false;
-  preview.classList.remove("is-editing", "is-expanded");
-  editHtmlButton.hidden = false;
-  expandPreviewButton.hidden = false;
-  saveHtmlEditButton.hidden = true;
-  cancelHtmlEditButton.hidden = true;
-  editWarning.hidden = !hasManualEdits;
-  clearMessage();
+  closeHtmlEditButton.click();
 });
 
 brandColorInput.addEventListener("input", () => {

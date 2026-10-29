@@ -11,8 +11,20 @@ contextBridge.exposeInMainWorld("electronAPI", {
   saveWarningStates: (filePath: string, warnings: ParseWarning[]) =>
     ipcRenderer.invoke("save-warning-states", filePath, warnings),
 
-  preparePreview: (html: string) =>
-    ipcRenderer.invoke("prepare-preview", html),
+  preparePreview: (html: string, filePath?: string) =>
+    ipcRenderer.invoke("prepare-preview", html, filePath),
+
+  activateDocument: (filePath: string) =>
+    ipcRenderer.invoke("activate-document", filePath),
+
+  loadArticleEditState: (filePath: string) =>
+    ipcRenderer.invoke("load-article-edit-state", filePath),
+
+  saveArticleEditState: (filePath: string, state: unknown) =>
+    ipcRenderer.invoke("save-article-edit-state", filePath, state),
+
+  setEditorDraftStatus: (dirty: boolean) =>
+    ipcRenderer.send("editor-draft-status", dirty),
 
   exportArticle: (html: string) =>
     ipcRenderer.invoke("export-article", html),

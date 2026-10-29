@@ -1,4 +1,4 @@
-import fs from "node:fs/promises";
+﻿import fs from "node:fs/promises";
 import path from "node:path";
 import {
   DOMParser,
@@ -148,6 +148,7 @@ function visibleText(element: XmlElement): string {
     if (isElement(node)) {
       if (
         node.namespaceURI === WORD_NS &&
+        node.localName !== null &&
         ["del", "delText", "instrText"].includes(node.localName)
       ) return;
       if (
@@ -178,10 +179,8 @@ function visibleText(element: XmlElement): string {
         node.localName === "softHyphen"
       ) return;
       if (node.namespaceURI === WORD_NS && node.localName === "sym") {
-        const code = Number.parseInt(
-          node.getAttributeNS(WORD_NS, "char"),
-          16
-        );
+        const symChar = node.getAttributeNS(WORD_NS, "char");
+        const code = symChar ? Number.parseInt(symChar, 16) : Number.NaN;
         if (
           Number.isInteger(code) &&
           code > 0 &&

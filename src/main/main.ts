@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
+﻿import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
 import fs from "node:fs/promises";
 import path from "node:path";
 
@@ -9,6 +9,12 @@ import {
   persistWarningStates,
   readWarningStates,
 } from "./warning-state-storage";
+import {
+  loadArticleEditState,
+  saveArticleEditState,
+  writeArticleWithBackup,
+} from "./article-storage";
+import type { ArticleEditState } from "./article-storage";
 
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string | undefined;
 declare const MAIN_WINDOW_VITE_NAME: string;
@@ -16,6 +22,42 @@ declare const MAIN_WINDOW_VITE_NAME: string;
 let mainWindow: BrowserWindow | null = null;
 let selectedDocumentPath: string | null = null;
 let savedArticlePath: string | null = null;
+let hasUnsavedEditorDraft = false;
+let allowWindowClose = false;
+let isConfirmingWindowClose = false;
+
+function isArticleEditState(value: unknown): value is ArticleEditState {
+  if (!value || typeof value !== "object") return false;
+  const state = value as Record<string, unknown>;
+  return (
+    Array.isArray(state.edits) &&
+    state.edits.every(
+      (edit) =>
+        typeof edit === "object" &&
+        edit !== null &&
+        "blockId" in edit &&
+        typeof edit.blockId === "string" &&
+        "originalHtml" in edit &&
+        typeof edit.originalHtml === "string" &&
+        "html" in edit &&
+        typeof edit.html === "string"
+    ) &&
+    (state.draftHtml === null || typeof state.draftHtml === "string") &&
+    (state.draftBaseHtml === undefined ||
+      state.draftBaseHtml === null ||
+      typeof state.draftBaseHtml === "string")
+  );
+}
+
+function sourcePathFrom(filePath: unknown): string {
+  if (
+    typeof filePath !== "string" ||
+    path.extname(filePath).toLowerCase() !== ".docx"
+  ) {
+    throw new Error("No se pudo identificar el documento del artículo.");
+  }
+  return filePath;
+}
 
 function imageMimeType(fileName: string): string {
   const extension = path.extname(fileName).toLowerCase();
@@ -36,13 +78,15 @@ function imageMimeType(fileName: string): string {
   return types[extension] ?? "application/octet-stream";
 }
 
-async function inlineArticleImages(html: string): Promise<string> {
-  if (!selectedDocumentPath) {
+async function inlineArticleImages(
+  html: string,
+  sourceDocumentPath = selectedDocumentPath
+): Promise<string> {
+  if (!sourceDocumentPath) {
     throw new Error("No hay un documento abierto para preparar.");
   }
 
-  const assetDirectoryName =
-    `${path.parse(selectedDocumentPath).name}_assets`;
+  const assetDirectoryName = `${path.parse(sourceDocumentPath).name}_assets`;
   const imagePaths = Array.from(
     html.matchAll(/src="([^"]+)"/g),
     (match) => match[1]
@@ -57,7 +101,7 @@ async function inlineArticleImages(html: string): Promise<string> {
 
     const imageBuffer = await fs.readFile(
       path.join(
-        path.dirname(selectedDocumentPath),
+        path.dirname(sourceDocumentPath),
         assetDirectoryName,
         fileName
       )
@@ -84,6 +128,42 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
     },
+  });
+  const window = mainWindow;
+
+  window.on("close", (event) => {
+    if (allowWindowClose || !hasUnsavedEditorDraft) return;
+    event.preventDefault();
+    if (isConfirmingWindowClose) return;
+    isConfirmingWindowClose = true;
+    void dialog
+      .showMessageBox(window, {
+        type: "warning",
+        title: "Edición sin guardar",
+        message: "Hay cambios de edición sin guardar.",
+        detail:
+          "El borrador se guardó automáticamente y podrás retomarlo si cierras la ventana.",
+        buttons: ["Seguir editando", "Cerrar ventana"],
+        defaultId: 0,
+        cancelId: 0,
+      })
+      .then(({ response }) => {
+        if (response === 1) {
+          allowWindowClose = true;
+          window.close();
+        }
+      })
+      .catch((error: unknown) => {
+        console.error("No se pudo confirmar el cierre de la ventana.", error);
+      })
+      .finally(() => {
+        isConfirmingWindowClose = false;
+      });
+  });
+  window.on("closed", () => {
+    if (mainWindow === window) mainWindow = null;
+    allowWindowClose = false;
+    hasUnsavedEditorDraft = false;
   });
 
   if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
@@ -125,11 +205,13 @@ ipcMain.handle("select-document", async () => {
 ipcMain.handle(
   "convert-document",
   async (_event, filePath: unknown) => {
-    if (
-      typeof filePath !== "string" ||
-      !selectedDocumentPath ||
-      path.resolve(filePath) !== path.resolve(selectedDocumentPath)
-    ) {
+    if (typeof filePath !== "string") {
+      throw new Error("El documento seleccionado ya no está disponible.");
+    }
+
+    if (!selectedDocumentPath) {
+      selectedDocumentPath = path.resolve(filePath);
+    } else if (path.resolve(filePath) !== path.resolve(selectedDocumentPath)) {
       throw new Error("El documento seleccionado ya no está disponible.");
     }
 
@@ -191,12 +273,59 @@ ipcMain.handle(
   }
 );
 
-ipcMain.handle("prepare-preview", async (_event, html: unknown) => {
-  if (typeof html !== "string") {
-    throw new Error("No se pudo preparar la vista del artículo.");
-  }
+ipcMain.handle(
+  "prepare-preview",
+  async (_event, html: unknown, filePath: unknown) => {
+    if (typeof html !== "string") {
+      throw new Error("No se pudo preparar la vista del artículo.");
+    }
+    const sourcePath =
+      typeof filePath === "string"
+        ? sourcePathFrom(filePath)
+        : selectedDocumentPath;
 
-  return inlineArticleImages(html);
+    return inlineArticleImages(html, sourcePath);
+  }
+);
+
+ipcMain.handle("activate-document", async (_event, filePath: unknown) => {
+  const sourcePath = sourcePathFrom(filePath);
+  await fs.access(sourcePath);
+  selectedDocumentPath = sourcePath;
+  savedArticlePath = null;
+});
+
+ipcMain.handle("load-article-edit-state", async (_event, filePath: unknown) => {
+  const sourcePath = sourcePathFrom(filePath);
+  return loadArticleEditState(
+    path.join(app.getPath("userData"), "article-edits"),
+    sourcePath
+  );
+});
+
+ipcMain.handle(
+  "save-article-edit-state",
+  async (_event, filePath: unknown, state: unknown) => {
+    const sourcePath = sourcePathFrom(filePath);
+    if (
+      !selectedDocumentPath ||
+      path.resolve(sourcePath) !== path.resolve(selectedDocumentPath)
+    ) {
+      throw new Error("No se pudo identificar el documento del artículo.");
+    }
+    if (!isArticleEditState(state)) {
+      throw new Error("No se pudo guardar el borrador del artículo.");
+    }
+    await saveArticleEditState(
+      path.join(app.getPath("userData"), "article-edits"),
+      sourcePath,
+      state
+    );
+  }
+);
+
+ipcMain.on("editor-draft-status", (_event, dirty: unknown) => {
+  hasUnsavedEditorDraft = dirty === true;
 });
 
 ipcMain.handle("export-article", async (_event, html: unknown) => {
@@ -223,7 +352,7 @@ ipcMain.handle("export-article", async (_event, html: unknown) => {
   if (result.canceled || !result.filePath) return null;
 
   const htmlWithImages = await inlineArticleImages(html);
-  await fs.writeFile(result.filePath, htmlWithImages, "utf8");
+  await writeArticleWithBackup(result.filePath, htmlWithImages);
   savedArticlePath = result.filePath;
   return result.filePath;
 });

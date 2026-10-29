@@ -62,6 +62,63 @@
 
         <p id="appMessage" class="app-message" role="status" aria-live="polite" hidden></p>
 
+        <section
+          id="regenerationDialog"
+          class="decision-dialog"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="regenerationDialogTitle"
+          aria-describedby="regenerationDialogMessage"
+          hidden
+        >
+          <div class="decision-dialog-panel">
+            <h2 id="regenerationDialogTitle">¿Qué hacemos con tus ediciones?</h2>
+            <p id="regenerationDialogMessage">
+              Hay <span id="manualEditCount">0</span> bloques editados a mano.
+              Regenerar puede sobrescribirlos.
+            </p>
+            <div class="decision-dialog-actions">
+              <button id="regenerateKeepButton" class="button button-primary" type="button">
+                Regenerar y conservar mis ediciones
+              </button>
+              <button id="regenerateDiscardButton" class="button button-secondary" type="button">
+                Regenerar y descartarlas
+              </button>
+              <button id="regenerateCancelButton" class="button button-text" type="button">
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <section
+          id="closeEditDialog"
+          class="decision-dialog"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="closeEditDialogTitle"
+          aria-describedby="closeEditDialogMessage"
+          hidden
+        >
+          <div class="decision-dialog-panel">
+            <h2 id="closeEditDialogTitle">¿Qué hacemos con tus cambios?</h2>
+            <p id="closeEditDialogMessage">
+              Hay cambios que todavía no guardaste en el artículo.
+            </p>
+            <div class="decision-dialog-actions">
+              <button id="saveAndCloseEditButton" class="button button-primary" type="button">
+                Guardar y cerrar
+              </button>
+              <button id="discardAndCloseEditButton" class="button button-secondary" type="button">
+                Descartar cambios
+              </button>
+              <button id="continueEditingButton" class="button button-text" type="button">
+                Seguir editando
+              </button>
+            </div>
+          </div>
+        </section>
+
         <section id="stepChoose" class="step-panel" aria-labelledby="choose-title">
           <div class="panel-heading">
             <span class="panel-step">Paso 1</span>
@@ -114,6 +171,16 @@
                   <button id="expandPreviewButton" class="button button-secondary" type="button">
                     Ampliar vista
                   </button>
+                  <button
+                    id="closeHtmlEditButton"
+                    class="button button-close-edit"
+                    type="button"
+                    aria-label="Volver a la vista previa"
+                    title="Volver a la vista previa"
+                    hidden
+                  >
+                    ×
+                  </button>
                   <button id="editHtmlButton" class="button button-secondary" type="button">
                     Editar
                   </button>
@@ -125,7 +192,7 @@
                   </button>
                 </div>
                 <p id="editWarning" class="edit-warning" hidden>
-                  Si vuelves a generar el artículo, podrías perder esta edición manual.
+                  Al regenerar, podrás conservar estas ediciones y revisar los bloques que hayan cambiado.
                 </p>
               </div>
               <iframe
@@ -134,6 +201,20 @@
                 title="Vista previa del artículo"
                 sandbox="allow-same-origin"
               ></iframe>
+            </section>
+
+            <section
+              id="editConflicts"
+              class="edit-conflicts"
+              aria-labelledby="editConflictsTitle"
+              hidden
+            >
+              <h3 id="editConflictsTitle">Ediciones para revisar</h3>
+              <p>
+                Algunos bloques cambiaron en la nueva versión. Conservamos tus
+                ediciones aquí para que puedas revisarlas.
+              </p>
+              <ul id="editConflictList"></ul>
             </section>
 
             <aside class="warnings-panel" aria-labelledby="warnings-title">
